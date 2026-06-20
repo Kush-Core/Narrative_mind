@@ -1,22 +1,13 @@
 from fastapi import FastAPI
 
+from codex.api.routers import api_router
 from codex.core.config import get_settings
 
 
-def create_app() -> FastAPI:
-    """Application factory: build and configure the FastAPI instance."""
+def create_app()-> FastAPI:
     settings = get_settings()
-    app = FastAPI(
-        title=settings.app_name,
-        debug=settings.debug,
-        version="0.1.0",
-    )
-
-    @app.get("/health", tags=["system"])
-    async def health() -> dict[str, str]:
-        return {"status": "ok", "environment": settings.environment}
-
+    app = FastAPI(title=settings.app_name, debug=settings.debug, version="0.1.0")
+    app.include_router(api_router)
     return app
 
-
-codex = create_app()
+app = create_app()
