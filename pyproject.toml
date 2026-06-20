@@ -1,0 +1,42 @@
+[project]
+name = "codex"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Kushagra Singh", email = "kushagra10010@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]>=0.137.2",
+    "pydantic-settings>=2.14.2",
+]
+
+[project.scripts]
+codex = "codex:main"
+
+[build-system]
+requires = ["uv_build>=0.11.18,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.15.18",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E,F = pyflakes/pycodestyle; I = isort; B = bugbear; UP = pyupgrade; SIM = simplify
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.uv]
+package = true
+
