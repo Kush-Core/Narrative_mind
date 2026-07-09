@@ -1,5 +1,3 @@
-from collections.abc import Generator
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -7,6 +5,7 @@ from codex.main import create_app
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
-    with TestClient(create_app()) as test_client:
-        yield test_client
+def client():
+    app = create_app()
+    with TestClient(app) as c:   
+        yield c
