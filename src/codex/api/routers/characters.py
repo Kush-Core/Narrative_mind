@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from codex.api.deps import CharacterService_Dep, PaginationDep
 from codex.domain.character import Character, CharacterCreate, CharacterUpdate
@@ -24,31 +24,27 @@ async def list_characters(
     order: Annotated[SortOrder, Query(alias="order")] = SortOrder.asc,
 ) -> Page[Character]:
     return await svc.list(
-        limit=page.limit, offset=page.offset,
+        limit=page.limit,
+        offset=page.offset,
         status=status_filter.value if status_filter else None,
-        name_contains=name_contains, sort_by=sort_by, order=order.value,
+        name_contains=name_contains,
+        sort_by=sort_by,
+        order=order.value,
     )
 
 
 @router.get("/{character_id}", response_model=Character)
 async def get_character(character_id: str, svc: CharacterService_Dep) -> Character:
-    character = await svc.get(character_id)
-    if character is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Character not found")
-    return character
+    return await svc.get(character_id)  
 
 
 @router.patch("/{character_id}", response_model=Character)
 async def update_character(
     character_id: str, payload: CharacterUpdate, svc: CharacterService_Dep
 ) -> Character:
-    updated = await svc.update(character_id, payload)
-    if updated is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Character not found")
-    return updated
+    return await svc.update(character_id, payload)
 
 
 @router.delete("/{character_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_character(character_id: str, svc: CharacterService_Dep) -> None:
-    if not await svc.delete(character_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Character not found")
+    await svc.delete(character_id)

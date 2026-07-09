@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from codex.api.routers import api_router
 from codex.core.config import get_settings
+from codex.core.error_handlers import register_error_handlers
 from codex.db.neo4j import close, connect
 
 
@@ -25,6 +26,7 @@ def create_app()-> FastAPI:
         lifespan=lifespan,
     )
     app.include_router(api_router)
+    register_error_handlers(app)
     return app
 
 app = create_app()
