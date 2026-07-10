@@ -115,4 +115,15 @@ class CharacterRepository:
         )
         record = await result.single()
         return record["character"] if record else None
+    
+    async def touch_indexed_at(self, character_id: str) -> None:
+        await self._session.execute_write(self._touch_tx, character_id)
+    
+    @staticmethod
+    async def _touch_tx(tx, character_id: str) -> None:
+        from datetime import UTC, datetime
+        await tx.run(
+            "MATCH (c:Character {id:$id}) SET c.last_indexed_at = $ts",
+            id=character_id, ts=datetime.now(UTC).isoformat(),
+        )
 

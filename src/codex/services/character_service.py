@@ -1,7 +1,11 @@
+import logging
+
 from codex.core.exceptions import NotFoundError
 from codex.domain.character import Character, CharacterCreate, CharacterUpdate
 from codex.domain.common import Page
 from codex.repositories.character_repo import CharacterRepository
+
+logger = logging.getLogger("codex.tasks")
 
 
 class CharacterService:
@@ -56,3 +60,9 @@ class CharacterService:
         deleted = await self._repo.delete(character_id)
         if not deleted:
             raise NotFoundError(f"Character with id {character_id} not present, cannot delete")
+        
+    async def reindex(self, character_id:str)->None:
+        await self._repo.touch_indexed_at(character_id)
+        logger.info("reindexed character %s", character_id)
+
+

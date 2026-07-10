@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, BackgroundTasks, Query, status
 
 from codex.api.deps import CharacterService_Dep, PaginationDep
 from codex.domain.character import Character, CharacterCreate, CharacterUpdate
@@ -10,8 +10,11 @@ router = APIRouter(prefix="/characters", tags=["characters"])
 
 
 @router.post("", response_model=Character, status_code=status.HTTP_201_CREATED)
-async def create_character(payload: CharacterCreate, svc: CharacterService_Dep) -> Character:
-    return await svc.create(payload)
+async def create_character(payload: CharacterCreate, svc: CharacterService_Dep, 
+                           background_tasks: BackgroundTasks) -> Character:
+    character = await svc.create(payload)
+    background_tasks.add_task(svc.reindex, character.id)
+    return character
 
 
 @router.get("", response_model=Page[Character])
@@ -48,3 +51,5 @@ async def update_character(
 @router.delete("/{character_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_character(character_id: str, svc: CharacterService_Dep) -> None:
     await svc.delete(character_id)
+
+
