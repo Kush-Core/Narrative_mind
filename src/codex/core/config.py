@@ -16,8 +16,8 @@ class Settings(BaseSettings):
 
     # Ollama (used from Phase 10)
     ollama_host: str = "http://localhost:11434"
-    ollama_chat_model: str = "llama3.2"
-    ollama_embed_model: str = "nomic-embed-text-v2-moe"
+    ollama_chat_model: str = "llama3.2:3b"
+    ollama_embed_model: str = "nomic-embed-text-v2-moe:latest"
 
 
     cors_origins: list[str] = ["http://localhost:5173"]

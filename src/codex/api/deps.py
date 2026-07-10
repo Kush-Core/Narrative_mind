@@ -6,7 +6,9 @@ from neo4j import AsyncSession
 
 from codex.core.config import Settings, get_settings
 from codex.db.neo4j import get_session
+from codex.providers.deps import LLMDep
 from codex.repositories.character_repo import CharacterRepository
+from codex.services.ai_service import AIService
 from codex.services.character_service import CharacterService
 
 Settings_Dep = Annotated[Settings, Depends(get_settings)]
@@ -36,3 +38,9 @@ def get_character_service(repo: CharacterRepository_Dep) -> CharacterService:
     return CharacterService(repo)
 
 CharacterService_Dep = Annotated[CharacterService, Depends(get_character_service)]
+
+def get_ai_service(llm: LLMDep) -> AIService:
+    return AIService(llm)
+
+
+AIServiceDep = Annotated[AIService, Depends(get_ai_service)]
