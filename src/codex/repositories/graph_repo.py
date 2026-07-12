@@ -21,7 +21,7 @@ class GraphRepository:
         RETURN c {{.id, .name}} AS center,
                collect(DISTINCT n {{.id, .name, labels: labels(n)}}) AS neighbors
         """
-        result = await tx.run(query, id=character_id) # type: ignore
+        result = await tx.run(query, id=character_id)  # type: ignore
         record = await result.single()
         if record is None or record["center"] is None:
             return None
@@ -41,5 +41,45 @@ class GraphRepository:
         RETURN [node IN nodes(p) | node {.id, .name}] AS hops, length(p) AS distance
         """
         result = await tx.run(query, source=source, target=target)
+        record = await result.single()
+        return dict(record) if record else None
+
+    async def node_exists(self, node_id: str) -> bool:
+        return await self._session.execute_read(self._node_exists_tx, node_id)
+
+    @staticmethod
+    async def _node_exists_tx(tx: AsyncManagedTransaction, node_id: str) -> bool:
+        result = await tx.run(
+            "MATCH (n {id: $id}) RETURN count(n) > 0 AS node_exists",
+            id=node_id,
+        )
+        record = await result.single()
+        return bool(record["node_exists"]) if record else False
+
+    async def link(
+        self, source_id: str, rel_type: str, target_id: str, sentiment: str | None
+    ) -> dict[str, Any] | None:
+        return await self._session.execute_write(
+            self._link_tx, source_id, rel_type, target_id, sentiment
+        )
+
+    @staticmethod
+    async def _link_tx(
+        tx: AsyncManagedTransaction,
+        source_id: str,
+        rel_type: str,
+        target_id: str,
+        sentiment: str | None,
+    ) -> dict[str, Any] | None:
+        set_clause = "SET r.sentiment = $sentiment" if sentiment is not None else ""
+        query = f"""
+        MATCH (source:Character {{id: $source_id}})
+        MATCH (target {{id: $target_id}})
+        MERGE (source)-[r:{rel_type}]->(target)
+        {set_clause}
+        RETURN source.id AS source_id, target.id AS target_id,
+               type(r) AS rel_type, r.sentiment AS sentiment
+        """
+        result = await tx.run(query, source_id=source_id, target_id=target_id, sentiment=sentiment)  # type: ignore
         record = await result.single()
         return dict(record) if record else None

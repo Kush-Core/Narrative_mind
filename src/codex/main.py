@@ -50,8 +50,13 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         elapsed_ms = (time.perf_counter() - start) * 1000
         response.headers["X-Process-Time-ms"] = f"{elapsed_ms:.1f}"
-        logger.info("%s %s -> %s (%.1fms)",
-                    request.method, request.url.path, response.status_code, elapsed_ms)
+        logger.info(
+            "%s %s -> %s (%.1fms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
         return response
 
     register_error_handlers(app)

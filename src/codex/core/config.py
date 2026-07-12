@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     ollama_chat_model: str = "llama3.2:3b"
     ollama_embed_model: str = "nomic-embed-text-v2-moe:latest"
 
-
     cors_origins: list[str] = ["http://localhost:5173"]
 
 

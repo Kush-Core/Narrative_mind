@@ -13,6 +13,7 @@ class SortOrder(StrEnum):
     asc = "asc"
     desc = "desc"
 
+
 class Page[T](BaseModel):
     items: list[T]
     total: int = Field(..., description="Total rows matching the query, ignoring paging.")

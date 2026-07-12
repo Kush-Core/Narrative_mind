@@ -24,9 +24,7 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(ValidationError)
     async def _validation(_: Request, exc: ValidationError) -> JSONResponse:
-        return JSONResponse(
-            status_code=422, content=_error_body("domain_validation", exc.message)
-        )
+        return JSONResponse(status_code=422, content=_error_body("domain_validation", exc.message))
 
     @app.exception_handler(CodexError)
     async def _fallback(_: Request, exc: CodexError) -> JSONResponse:

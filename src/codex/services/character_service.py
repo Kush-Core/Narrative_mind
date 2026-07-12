@@ -13,7 +13,6 @@ class CharacterService:
         self._repo = repo
 
     async def create(self, payload: CharacterCreate) -> Character:
-        # Build the full record: model defaults supply id + created_at.
         character = Character(**payload.model_dump())
         row = await self._repo.create(character.model_dump(exclude={"display_name"}))
         return Character.model_validate(row)
@@ -60,9 +59,7 @@ class CharacterService:
         deleted = await self._repo.delete(character_id)
         if not deleted:
             raise NotFoundError(f"Character with id {character_id} not present, cannot delete")
-        
-    async def reindex(self, character_id:str)->None:
+
+    async def reindex(self, character_id: str) -> None:
         await self._repo.touch_indexed_at(character_id)
         logger.info("reindexed character %s", character_id)
-
-

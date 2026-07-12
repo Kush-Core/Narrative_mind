@@ -1,5 +1,9 @@
 import asyncio
 
+from fastapi.testclient import TestClient
+
+from codex.main import create_app
+from codex.providers.deps import get_llm
 from codex.services.ai_service import AIService
 
 
@@ -17,6 +21,19 @@ class _FakeLLM:
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         raise AssertionError("embed should not be called in this test")
+
+
+class _StubLLM:
+    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+        return "stub description"
+
+    async def generate_structured(
+        self, prompt: str, schema: dict[str, object], *, system: str | None = None
+    ) -> str:
+        return '{"entities":[],"relationships":[]}'
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] * 768 for _ in texts]
 
 
 def test_extract_filters_invalid_relationships() -> None:
@@ -54,3 +71,18 @@ def test_extract_filters_invalid_relationships() -> None:
         ("Aria Vane", "MET_IN", "Borin"),
         ("Aria Vane", "MEMBER_OF", "Iron Pact"),
     ]
+
+
+def test_describe_endpoint_uses_stub_provider() -> None:
+    # Overriding get_llm proves the /ai endpoint runs without a real Ollama server.
+    # The TestClient is used without a context manager so app lifespan (and the
+    # Neo4j connection it opens) is skipped; /ai/describe touches only the provider.
+    app = create_app()
+    app.dependency_overrides[get_llm] = lambda: _StubLLM()
+    client = TestClient(app)
+    try:
+        res = client.post("/ai/describe", json={"name": "Aria Vane"})
+        assert res.status_code == 200
+        assert res.json()["description"] == "stub description"
+    finally:
+        app.dependency_overrides.clear()
