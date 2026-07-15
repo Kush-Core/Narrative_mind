@@ -42,7 +42,7 @@ class LocationUpdate(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> "LocationUpdate":
-        if not self.model_dump(exclude_none=True):
+        if not self.model_fields_set:
             raise ValueError("update must contain at least one field")
         return self
 
