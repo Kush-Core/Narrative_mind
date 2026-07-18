@@ -1,7 +1,7 @@
 [project]
-name = "codex"
+name = "narrative-mind"
 version = "0.1.0"
-description = "Add your description here"
+description = "Narrative Mind — a Narrative Intelligence Platform"
 readme = "README.md"
 authors = [
     { name = "Kushagra Singh", email = "kushagra10010@gmail.com" }
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-codex = "codex:main"
+narrative-mind = "narrative_mind:main"
 
 [build-system]
 requires = ["uv_build>=0.11.18,<0.12.0"]

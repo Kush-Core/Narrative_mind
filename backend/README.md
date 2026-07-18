@@ -1,10 +1,18 @@
-# Codex — Narrative Worldbuilding Knowledge Graph & Assistant (V1)
+# Narrative Mind — A Narrative Intelligence Platform
 
-An async **FastAPI + Neo4j + Ollama** backend for worldbuilding. It models the
-entities of a fictional world — `Character`, `Location`, `Faction`, `Event` — and
-the relationships between them as a graph, and exposes two AI endpoints
-(prose generation and schema-constrained entity extraction) behind a swappable
-LLM provider.
+Narrative Mind is a platform for building, understanding, and reasoning about
+fictional worlds. Its foundational capability is the **Narrative Graph**: an
+async **FastAPI + Neo4j + Ollama** backend that models the entities of a
+fictional world — `Character`, `Location`, `Faction`, `Event` — and the
+relationships between them as a graph, and exposes two AI endpoints (prose
+generation and schema-constrained entity extraction) behind a swappable LLM
+provider.
+
+This repository currently implements the Narrative Graph (V1). The longer-term
+platform vision layers additional narrative intelligence capabilities on top
+of it — Character Management, Timeline, Rich Text Editing, World Encyclopedia,
+AI Reasoning, Consistency Checking, and Knowledge Search — none of which are
+implemented yet.
 
 ## Architecture
 
@@ -65,7 +73,7 @@ Environment variables (matched case-insensitively to `Settings` fields):
 Any Neo4j 5.x instance works. For a local container:
 
 ```bash
-docker run --name codex-neo4j \
+docker run --name narrative-mind-neo4j \
   -p 7474:7474 -p 7687:7687 \
   -e NEO4J_AUTH=neo4j/password123 \
   -d neo4j:5
@@ -84,7 +92,7 @@ ollama pull nomic-embed-text-v2-moe   # optional in V1 (used by RAG in V2)
 ## Running the API
 
 ```bash
-uv run uvicorn codex.main:app --reload
+uv run uvicorn narrative_mind.main:app --reload
 ```
 
 - Interactive API docs: <http://localhost:8000/docs>
