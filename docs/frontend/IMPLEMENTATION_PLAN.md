@@ -1,0 +1,259 @@
+# Implementation Plan — Narrative Mind Frontend
+
+> Planning document. **No implementation is performed here.** An incremental
+> roadmap of milestones. Each milestone lists Objective, Deliverables,
+> Dependencies, Risks, and estimated Git commit scope. Grounded in the backend
+> contract ([../REPOSITORY_ANALYSIS.md](../REPOSITORY_ANALYSIS.md)) and the design
+> docs in this folder. **Execution awaits explicit approval.**
+
+---
+
+## Sequencing principle
+
+Build the **spine before the features**: transport + schema + shell first, then one
+concrete entity end-to-end, then *generalize* into the entity engine, then fan out
+the remaining entities cheaply, then the specialized surfaces (relationships,
+graph), then polish. Abstraction (the entity engine) is introduced only after one
+concrete entity reveals the true seam — avoiding speculative generalization (KISS).
+
+"Commit scope" is an estimate of coherent commits, not a schedule. Each milestone
+is independently reviewable and leaves the app in a working state.
+
+---
+
+## M0 — Workspace bootstrap & toolchain
+
+- **Objective:** A running, strictly-typed, dark-themed empty app under
+  `frontend/`, wired to the backend origin.
+- **Deliverables:**
+  - Vite + React + TypeScript (strict) project; `@/*` path alias.
+  - Tailwind + shadcn/ui initialized; `components.json`; dark token set
+    (`styles/tokens.css`) as the single visual contract.
+  - ESLint (typed, import-order, a11y) + Prettier; the folder skeleton from
+    [FRONTEND_FILE_STRUCTURE.md](./FRONTEND_FILE_STRUCTURE.md) (empty slices,
+    reserved `ai/` and `routes/guards/`).
+  - `.env.example` with `VITE_API_BASE_URL`; typed `import.meta.env`.
+  - `AppRoot` mounting a placeholder shell.
+- **Dependencies:** none (backend already runs on `:8000`, CORS allows `:5173`).
+- **Risks:** stack version-compatibility drift (Tailwind/shadcn majors) — pin
+  mutually-compatible latest versions at this step and record them. Low overall.
+- **Commit scope:** ~3–5 (scaffold, tokens/theme, lint/format, providers).
+
+> **M0 as-built notes (2026-07-18):** the `/health` "backend connected" check
+> originally listed here moved to M1 (it belongs with the live StatusBar wiring,
+> and the foundation phase was scoped to zero API requests). Tailwind v4 is
+> configured CSS-first (no `tailwind.config.ts`). Recorded foundation versions:
+> React 19.2 · Vite 8.1 · TypeScript 6.0 · Tailwind 4.3 · React Router 7.18 ·
+> TanStack Query 5.101 · ESLint 9.39 (v10 exists but `eslint-plugin-jsx-a11y`
+> does not yet support it) · shadcn/ui new-york style on the consolidated
+> `radix-ui` package.
+
+---
+
+## M1 — App shell & navigation
+
+- **Objective:** The persistent desktop chrome and route skeleton — the app *feels*
+  like the product before it holds real data.
+- **Deliverables:**
+  - `WorkspaceLayout` (resizable explorer | main | optional aux), `ExplorerSidebar`,
+    `CommandBar`, `StatusBar` (live `/health` + environment — includes the
+    "backend connected" wiring proof moved here from M0).
+  - React Router route tree in `src/routes/` with lazy feature routes, `paths.ts`
+    typed builders, not-found + error elements, `AppErrorBoundary`.
+  - Command/keyboard registry (`shared/commands/`) + `CommandPalette` (Cmd/Ctrl-K)
+    with a few real commands (navigate, focus search).
+  - Zustand UI store (panel sizes, sidebar collapse, palette open).
+- **Dependencies:** M0.
+- **Risks:** over-investing in chrome before data exists (time sink); resizable-
+  panel + keyboard focus-management edge cases. Mitigate by keeping panels/commands
+  minimal now and expanding in M8.
+- **Commit scope:** ~4–6 (layout, routing+paths, error boundary, command registry
+  + palette, status bar).
+
+---
+
+## M2 — API & schema foundation
+
+- **Objective:** The complete, tested network spine — every backend quirk absorbed
+  in one place — with **no feature UI yet**.
+- **Deliverables:**
+  - `httpClient` (fetch wrapper: base URL, JSON, `AbortSignal`, timeout, auth seam).
+  - `ApiError` + both-shape normalizer (domain envelope **and** FastAPI `detail[]`).
+  - Shared Zod primitives: `Page<T>` **with client-derived `hasMore`**, error
+    schemas, id/isoDate.
+  - Zod schema sets + wire↔domain mappers for all four entities (Base/Create/
+    Update/Read), including read-only `display_name` handling.
+  - QueryClient factory (retry predicate: no-retry-on-4xx; placeholderData policy)
+    and the central query-key registry.
+  - MSW-based mocks so this layer is testable without a live backend (mirrors the
+    backend's `_FakeLLM`/`_StubLLM` stubbing ethos).
+- **Dependencies:** M0. (Independent of M1 — can proceed in parallel.)
+- **Risks:** **highest-value, gotcha-dense milestone.** The two 422 shapes, the
+  `has_more` omission, `exclude_none`/empty-update PATCH semantics, and snake↔camel
+  mapping all live here. A mistake propagates everywhere. Mitigate with focused unit
+  tests per gotcha (documented in [API_INTEGRATION_PLAN.md](./API_INTEGRATION_PLAN.md) §3).
+- **Commit scope:** ~5–7 (http-client, error normalizer, page/error schemas,
+  per-entity schemas+mappers, query-client+keys, MSW mocks/tests).
+
+---
+
+## M3 — First entity concrete, then the entity engine (Characters)
+
+- **Objective:** Ship Characters fully as a *concrete* vertical, then extract the
+  generic `entity-kit` from it — proving the abstraction against reality.
+- **Deliverables:**
+  - `characters` slice: resource fns, query/mutation hooks, list + detail pages.
+  - List: URL-driven filters/sort/pagination (`status` filter, valid sort fields
+    only), `DataTable`, empty/error/loading states, keep-previous pagination.
+  - Detail + create/edit `EntityForm` (RHF+Zod), delete via `ConfirmDialog`,
+    optimistic detail patch + list invalidation, `fieldErrors`→form mapping,
+    changed-fields-only PATCH.
+  - **Extraction step:** generalize into `EntityDescriptor` + `EntityListView`/
+    `EntityDetailView`/`EntityForm`/`useEntityListQuery`/`useEntityMutations`, with
+    Characters re-expressed as the first descriptor (+ a relationships slot stub).
+- **Dependencies:** M1 (shell/routes), M2 (network/schemas).
+- **Risks:** **over-abstraction** — extracting too early or too rigidly. Mitigate by
+  building concrete first and only lifting what a second entity (M4) will truly
+  share; keep entity-specifics in slots, never engine conditionals.
+- **Commit scope:** ~6–8 (resource+queries, list, detail, form/create, edit/delete,
+  optimism/invalidation, engine extraction).
+
+---
+
+## M4 — Fan out remaining entities via descriptors (Locations, Factions, Events)
+
+- **Objective:** Add three entities at near-zero marginal cost, validating the
+  engine and its escape hatches.
+- **Deliverables:**
+  - `locations` (region filter), `factions` (ideology filter), `events`
+    (`timeline_order` field + sortable column, no categorical filter) — each as a
+    descriptor + thin pages.
+  - Any engine refinements the three reveal (fed back cleanly, no per-entity `if`s).
+  - Explorer sidebar shows all four entity groups with live counts.
+- **Dependencies:** M3 (the engine).
+- **Risks:** discovering the abstraction leaks (an entity needs something the
+  descriptor can't express) → resolve by extending the descriptor contract or adding
+  a slot, not by branching the engine. Exact-match `region`/`ideology` filtering
+  with no distinct-values endpoint may feel limited → position `name_contains` as
+  primary search; note as a backend enhancement candidate.
+- **Commit scope:** ~3–5 (one per entity + engine touch-ups).
+
+---
+
+## M5 — Relationships (Character-rooted graph writes)
+
+- **Objective:** Let writers connect entities, honoring the exact backend contract.
+- **Deliverables:**
+  - `CharacterRelationshipEditor` in the Character detail slot: `rel_type` ∈
+    {KNOWS, MEMBER_OF, LOCATED_IN, PARTICIPATED_IN}; `EntityPicker` target select;
+    `sentiment` shown only for `KNOWS`.
+  - Valid target-type guidance per rel (MEMBER_OF→Faction, LOCATED_IN→Location,
+    PARTICIPATED_IN→Event, KNOWS→Character) while tolerating the backend's
+    non-enforcement of target type.
+  - Resource fn + mutation for `POST /characters/{id}/relationships`; 404/422
+    handling (target-not-found, invalid rel type) surfaced inline.
+- **Dependencies:** M4 (entities to link; `EntityPicker` uses their list APIs).
+- **Risks:** backend does **not** enforce target type or return the full edge set
+  (no "list relationships" endpoint exists) — the UI can create edges but cannot
+  *read them back* except via the graph network endpoint. Mitigate by sourcing the
+  character's current relationships from `GET /graph/characters/{id}/network?depth=1`
+  and documenting the read limitation.
+- **Commit scope:** ~3–4 (picker, editor, mutation+errors, network-backed read).
+
+---
+
+## M6 — Graph explorer (isolated, lazy, pluggable renderer)
+
+- **Objective:** Visualize and traverse the world graph without taxing the rest of
+  the app.
+- **Deliverables:**
+  - `graph` slice: ego-network view (depth `1..3` control) and shortest-path finder
+    (two pickers → hops + distance).
+  - `GraphRenderer` interface + one concrete renderer behind it; the whole slice is
+    `React.lazy`-loaded.
+  - Node styling by entity-type accent tokens; click-through to entity detail.
+- **Dependencies:** M4 (entities), M5 (relationships give the graph content).
+- **Risks:** **visualization is the heaviest, riskiest surface** — library choice,
+  performance on larger graphs, and layout quality. Mitigate: the renderer interface
+  quarantines the library (swap in isolation); cap/clamp to the backend's depth
+  `≤3` and path length `≤6`; start with modest graphs. Keep graph *algorithms*
+  server-side (out of scope for the client).
+- **Commit scope:** ~4–6 (slice+queries, renderer interface, concrete renderer,
+  ego view, shortest-path, lazy wiring).
+
+---
+
+## M7 — World overview & global search
+
+- **Objective:** A meaningful landing surface and cross-entity discovery.
+- **Deliverables:**
+  - `OverviewPage`: world summary (entity counts, recent items), entry points into
+    each entity and the graph — not an empty dashboard.
+  - Command-palette **global search**: fan-out `name_contains` across entities
+    (bounded, debounced), routing to results. Built against today's substring
+    filter, ready to re-point at a future search endpoint with no UI change.
+- **Dependencies:** M4 (entity lists), M1 (palette).
+- **Risks:** fan-out search issues N parallel requests and only does substring
+  matching (no relevance/full-text) — set expectations, bound concurrency, cache
+  aggressively; flag a real search endpoint as the future upgrade.
+- **Commit scope:** ~3–4 (overview, counts, palette search, result routing).
+
+---
+
+## M8 — Polish, keyboard, accessibility, motion
+
+- **Objective:** Bring the app to the intended professional, desktop-class finish.
+- **Deliverables:**
+  - Full keyboard map (navigation, create, search, delete-with-confirm, panel
+    toggles) registered as commands + `Kbd` hints throughout.
+  - State-communicating transitions (panel, route cross-fade, list reflow,
+    optimistic settle) via motion tokens; no decorative motion.
+  - Accessibility pass (focus order, roles, contrast against tokens, escape/return
+    focus), empty/error/loading consistency, responsive-within-desktop behavior.
+  - Performance pass (code-split verification, memoization of hot lists, query
+    `staleTime` tuning).
+- **Dependencies:** all prior.
+- **Risks:** scope creep in polish; regressions from broad tweaks — gate with the
+  test suite from M2 onward and review per surface.
+- **Commit scope:** ~5–8 (keyboard, motion, a11y, empty/error states, perf).
+
+---
+
+## Deferred / out-of-scope seams (built only when approved)
+
+These are explicitly **not** in the milestones above; the architecture leaves each
+a correctly-shaped, inert seam (see [FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md) §7):
+
+- **Authentication/authorization** — `AuthTokenProvider`, 401 policy,
+  `routes/guards/`, cache-reset-on-identity. Out of scope.
+- **AI surfaces** (`/ai/describe`, `/ai/extract`) — an `ai` slice + form/panel
+  slots. Out of scope now; endpoints already exist for a later milestone.
+- **Multi-world / projects** — `worldId` key-prefix + path segment. Requires a
+  backend change first.
+- **Real-time / bulk ops** — push-invalidation and batch flows. No backend support
+  today.
+- **CI/CD, Docker, monitoring, analytics** — out of scope per the brief.
+
+---
+
+## Cross-cutting risk register
+
+| Risk | Where | Likelihood | Mitigation |
+|---|---|---|---|
+| Backend serialization gotchas mishandled (`has_more`, dual-422, `exclude_none`) | M2 | Med | Centralize in schema/error layer; unit-test each gotcha with MSW |
+| Over-abstraction of the entity engine | M3–M4 | Med | Concrete-first; extract on 2nd consumer; slots not branches |
+| Graph visualization performance/library risk | M6 | Med-High | Renderer interface; clamp depth/length; lazy-load; modest graphs first |
+| Relationships readable only via graph endpoint | M5 | Med | Source current edges from network(depth=1); document limitation |
+| Exact-match categorical filters, no distinct-values endpoint | M4/M7 | Low-Med | `name_contains` as primary search; note backend enhancement |
+| Stack version incompatibility (Tailwind/shadcn/RSC majors) | M0 | Low | Pin compatible latest at bootstrap; record versions |
+| Chrome-before-data time sink | M1 | Low | Keep shell minimal until M3; finish in M8 |
+
+---
+
+## Definition of done (per milestone)
+
+Type-checks under strict TS · lint/format clean · the milestone's user-visible flow
+works against the running backend (or MSW where noted) · no server data duplicated
+outside the Query cache · new UI has empty/error/loading states · keyboard-reachable
+where applicable. The app remains runnable and reviewable at every milestone
+boundary.

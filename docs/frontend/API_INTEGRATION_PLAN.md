@@ -1,0 +1,267 @@
+# API Integration Plan — Narrative Mind
+
+> Planning document. **No implementation.** How the frontend talks to the existing
+> FastAPI backend. Every decision is grounded in the verified backend contract in
+> [../REPOSITORY_ANALYSIS.md](../REPOSITORY_ANALYSIS.md). Read with
+> [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) (which owns caching policy) and
+> [FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHITECTURE.md) §4–5.
+
+---
+
+## 1. API client architecture
+
+Three layers, one direction of dependency — mirroring the backend's
+`repositories → domain` split (architecture §2.1):
+
+```
+Query hooks (TanStack Query)      ← cache, retry policy, invalidation, loading
+      │  calls
+Resource functions (per entity)   ← the only place URLs/verbs/params live
+      │  calls
+HTTP client (fetch wrapper)       ← transport, JSON, AbortSignal, error norm, auth seam
+      │
+   FastAPI backend
+```
+
+### D8 — Transport: native `fetch` wrapper (not axios/ky)
+
+- **Decision:** A ~single-module typed `httpClient` over the browser `fetch` API.
+- **Reasoning:** TanStack Query already owns retry, dedupe, and loading state, so
+  the transport's job shrinks to: prepend `VITE_API_BASE_URL`, set JSON headers,
+  serialize/parse bodies, thread an `AbortSignal`, normalize errors, and expose one
+  auth seam. axios/ky would add a dependency to re-implement capabilities we get
+  elsewhere.
+- **Benefits:** Zero transport dependencies; smallest possible surface to audit;
+  first-class request cancellation via the `AbortSignal` Query provides.
+- **Trade-offs:** We hand-write niceties axios ships (interceptors, auto-JSON). Mitigated
+  because there is exactly one interceptor need (auth) and one parse path (JSON).
+- **Future scalability:** The single `httpClient` is the natural home for the auth
+  header, a `worldId` prefix, request-id propagation, and 401 handling — all as
+  additive hooks, no call-site changes.
+
+**Resource layer (per entity/feature).** Pure async functions:
+`listCharacters(input) · getCharacter(id) · createCharacter(body) ·
+updateCharacter(id, patch) · deleteCharacter(id) · linkRelationship(id, body)`.
+They build the request, call `httpClient`, and return **schema-validated** typed
+data. They contain no React and no caching — the frontend twin of a repository.
+
+**Query layer.** TanStack Query hooks wrap the resource functions with keys,
+caching, and invalidation (see [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md)).
+
+---
+
+## 2. Request flow (end to end)
+
+Reading a character list:
+
+```
+Component
+  → useEntityListQuery(descriptor, {limit,offset,sort_by,order,name_contains,status})
+    → queryKey = ['characters','list', normalizedInput]
+    → queryFn: listCharacters(input)
+        → httpClient.get('/characters', { searchParams, signal })
+            → fetch(BASE + '/characters?...')
+            → on !ok: parse body → throw ApiError (normalized)
+            → on ok: raw JSON
+        → PageSchema(CharacterReadSchema).parse(raw)   // validate + derive hasMore
+        → map wire(snake_case) → domain(camelCase)
+    ← Page<Character> (typed)
+  ← { data, isPending, isFetching, isError, error }
+```
+
+Writing (create) is identical until the mutation resolves, at which point the
+Query layer invalidates `['characters','list']` (and any affected detail key).
+
+---
+
+## 3. Response mapping (schema layer = single source of truth)
+
+### D7 — Zod schemas mirror backend DTOs; types are inferred
+
+- **Decision:** Hand-author one Zod schema set per entity mirroring the Pydantic
+  triads (`Base / Create / Update / Read`), infer TypeScript types from them, and
+  **validate every response at the boundary**.
+- **Reasoning:** The backend's DTOs are stable and constraint-rich (name 1–120,
+  aliases ≤10, `status` enum, `passage` 10–5000). One Zod schema simultaneously
+  (a) generates the TS type, (b) validates API responses, and (c) validates forms
+  via `@hookform/resolvers`. That is maximal DRY for one dependency.
+- **Benefits:** Backend drift surfaces immediately at the seam, not three screens
+  later; form rules and wire rules can't diverge; strong end-to-end typing with no
+  codegen step.
+- **Trade-offs:** Schemas are maintained by hand against the backend (not generated
+  from its OpenAPI). Accepted because the entity set is tiny and stable, and hand
+  schemas let us encode things OpenAPI omits (the `hasMore` derivation, the error
+  envelope, the read-only `display_name`). *Considered alternative:*
+  `openapi-typescript` codegen from FastAPI's `/openapi.json` — deferred (adds a
+  build step, produces types-only with no runtime validation, and would still need
+  hand-patching for the backend's serialization quirks). It remains a viable future
+  swap behind the same resource-layer interface.
+- **Future scalability:** New fields = one schema edit; the descriptor engine picks
+  them up for table/form automatically.
+
+### Casing anti-corruption boundary
+
+- The wire is **snake_case** (`created_at`, `timeline_order`, `name_contains`,
+  `sort_by`, `source_id`). The app is **camelCase**.
+- Each `*.schema.ts` owns two mappers: `fromWire` (response → domain) and `toWire`
+  (domain → request body/params). Components and hooks only ever see camelCase.
+- This isolates every wire-specific quirk in one file per entity.
+
+### Verified backend gotchas the mapping layer must absorb
+
+Each is a fact from the analysis, with the required handling:
+
+1. **`Page.has_more` is not serialized** (§Observations #9). The `Page` schema
+   **derives** `hasMore = offset + items.length < total`. Components never look for
+   a server `has_more`.
+2. **Two different 422 shapes.** Domain validation returns
+   `{"error":{"code":"domain_validation","message":…}}`; FastAPI request-validation
+   returns `{"detail":[{loc,msg,type},…]}`. Both normalize to one `ApiError`
+   (§4). Field-level `loc` paths are mapped back to form fields.
+3. **`exclude_none` on PATCH** (§Service Layer). Sending `field: null` does **not**
+   clear a value — the backend drops nulls. The client therefore treats optional
+   fields as "cannot be nulled via PATCH"; the UI does not offer a "clear to null"
+   affordance it can't honor. (Documented as a product constraint, not a bug.)
+4. **Empty update is rejected (422)** (`if not self.model_fields_set`). Update
+   requests send **only changed fields**, diffed against the loaded entity; if the
+   diff is empty, the client short-circuits without a request.
+5. **`display_name` is a read-only computed field** on Character responses. It is
+   parsed for display but stripped from any `toWire` body (never echoed on write).
+6. **`created_at` is a plain ISO string**, not a guaranteed typed datetime. The
+   schema parses it as an ISO string and formatting is done defensively.
+7. **Sort whitelist differs per entity and invalid sorts silently fall back to
+   `name`.** The descriptor lists only the valid `sort_by` values per entity
+   (`status`/`region`/`ideology`/`timeline_order` etc.), so the UI never offers an
+   option the backend would ignore.
+8. **Categorical filters are exact-match, and there is no distinct-values
+   endpoint.** `status` is a known enum (safe as a select). `region`/`ideology`
+   are exact string equality with no way to enumerate values server-side; the UI
+   treats them as exact-match inputs (with values discovered from loaded data as an
+   aid), and positions `name_contains` as the primary discovery filter.
+9. **Relationships are Character-rooted** (`POST /characters/{id}/relationships`),
+   `rel_type ∈ {KNOWS, MEMBER_OF, LOCATED_IN, PARTICIPATED_IN}`, `sentiment`
+   meaningful only for `KNOWS`, and the backend does **not** enforce target type
+   (§Observations #8). The UI guides valid pairings (MEMBER_OF→Faction,
+   LOCATED_IN→Location, PARTICIPATED_IN→Event, KNOWS→Character) while staying
+   tolerant of what the backend allows.
+
+---
+
+## 4. Error handling
+
+### Normalized error model
+
+Every failure becomes one shape, produced in `shared/api/api-error.ts`:
+
+```
+ApiError {
+  status: number
+  code: 'not_found' | 'conflict' | 'domain_validation' | 'bad_request'
+        | 'validation' | 'network' | 'timeout' | 'unknown'
+  message: string            // human-readable, safe to toast
+  fieldErrors?: Record<string, string>   // from FastAPI 'detail' loc paths
+  cause?: unknown
+}
+```
+
+Mapping rules (from the verified error contract, §Error Handling):
+
+| Source | Detection | Normalized `code` | Routed to |
+|---|---|---|---|
+| Domain envelope `{error:{code}}` | body has `error.code` | that code (`not_found`/`conflict`/`domain_validation`/`bad_request`) | toast; 404 → not-found UI |
+| FastAPI validation | HTTP 422 + body has `detail[]` | `validation` + `fieldErrors` | form `setError` per field |
+| Network failure / abort | fetch throws / `AbortError` | `network` / (abort ignored) | toast (or silent on abort) |
+| Timeout | client-side deadline | `timeout` | toast + retry affordance |
+| Anything else | fallback | `unknown` | toast + error boundary if fatal |
+
+- **Placement of handling:**
+  - *Field/validation errors* → surfaced inline on the form (RHF), never a toast.
+  - *Domain + transport errors* → non-blocking toast (shadcn Sonner) from a shared
+    mutation error handler; read errors render an `ErrorState` in place with retry.
+  - *Render-time failures* → `AppErrorBoundary` (recovery UI, shell survives).
+- **404 semantics:** `getEntity` 404 → a dedicated "not found" detail state (the
+  entity may have been deleted in another view), with a path back to the list.
+- **`conflict` (409):** defined and handled in the client even though the backend
+  does not currently raise it (§Observations #2) — the seam is ready if a
+  uniqueness rule is added later, at zero cost now.
+
+---
+
+## 5. Loading strategy
+
+Owned by TanStack Query state, expressed through shared UI states:
+
+- **First load:** `isPending` → skeleton (`LoadingState`, shadcn `Skeleton`) shaped
+  like the target (table rows / detail fields), not a spinner — preserves layout.
+- **Background refetch:** `isFetching && !isPending` → a subtle top-bar progress
+  indicator; the stale-but-present data stays interactive (stale-while-revalidate).
+- **Pagination/param change:** `placeholderData` (keep-previous) so the current
+  page/detail stays on screen during the next fetch — no flash, IDE-smooth.
+- **Mutations:** optimistic where safe (see §pagination/optimism below); a pending
+  affordance on the triggering control; success/failure via toast.
+- **Route transitions:** feature routes are `React.lazy` + `Suspense`; a route-level
+  fallback keeps the shell (sidebar/status bar) mounted while a feature chunk loads.
+- **Global read model:** default `staleTime` is a few seconds (data changes are
+  user-driven and low-frequency), so navigation feels instant while edits still
+  reconcile promptly on invalidation.
+
+---
+
+## 6. Pagination
+
+- **Model:** offset-based, mirroring the backend exactly — `limit` (default 20,
+  `1..100`) and `offset` (`≥0`), returning `{items,total,limit,offset}` and the
+  **client-derived `hasMore`** (§3, gotcha #1).
+- **State home:** list params live in the **URL** (`?limit&offset&sort_by&order&
+  name_contains&<categorical>`), so pages are deep-linkable and back/forward work
+  (see [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) §URL state). The query key is
+  derived from these params.
+- **Primary UX:** windowed pagination (prev/next + page size) using `hasMore` and
+  `total` — precise and honest about position, fitting a professional tool.
+- **Secondary UX (optional, deferred):** `useInfiniteQuery` for scroll-heavy views
+  (e.g., an entity picker), also offset-based (`getNextPageParam` computes the next
+  `offset` from `hasMore`). Offered as an available pattern, not a default.
+- **Cross-page mutation coherence:** after create/delete, list keys are invalidated
+  rather than surgically patched, because `total` and page membership shift; detail
+  keys are patched optimistically.
+
+---
+
+## 7. Retry strategy
+
+- **Reads (GET):** TanStack Query retry with exponential backoff, but a **retry
+  predicate that never retries 4xx** (`not_found`, `validation`, `bad_request`) —
+  those are deterministic. Retries apply only to `network`/`timeout`/5xx. This
+  avoids hammering the backend on a genuine 404/422.
+- **Mutations (POST/PATCH/DELETE):** **no automatic retry.** They are not
+  guaranteed idempotent from the client's view (create is not; the backend exposes
+  no idempotency key), so silent replays could double-write. Retry is user-driven
+  (the failed action stays actionable).
+- **Cancellation:** every request receives the `AbortSignal` from Query; navigating
+  away or changing params aborts in-flight reads automatically.
+- **Timeout:** the `httpClient` enforces a client-side deadline (via `AbortSignal.
+  timeout`) so a hung backend surfaces as `timeout` rather than an infinite spinner.
+- **Health/degraded mode:** `GET /health` is polled at a low interval to drive the
+  status bar; repeated transport failures flip the indicator to "offline" and the
+  UI favors cached data with a reconnect affordance.
+
+---
+
+## 8. Future authentication compatibility (seam only — out of scope now)
+
+No auth is implemented. The architecture leaves exactly one correctly-shaped hole:
+
+- **`AuthTokenProvider` interface** (`shared/api/auth.ts`), injected into
+  `httpClient`. Today a no-op; later it supplies a bearer token per request.
+- **Cookie path already open:** backend CORS sets `allow_credentials=True`, so a
+  future cookie/session scheme works by having `httpClient` send
+  `credentials: 'include'` — a one-line change behind the same seam.
+- **401 policy:** a single response hook maps `401 → sign-out + redirect to a
+  (future) sign-in route`; `routes/guards/` is the reserved place for route
+  protection.
+- **Cache isolation:** on identity change, the QueryClient is reset so no data
+  leaks across users. The query-key registry is the single point to add a
+  per-identity or per-world prefix.
+- **Nothing ships now:** these are inert interfaces and empty folders. They make
+  the later addition additive and low-risk, satisfying "future compatibility
+  matters, implementation does not."
