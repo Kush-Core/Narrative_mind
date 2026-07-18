@@ -1,5 +1,6 @@
 import { CircleDotIcon } from "lucide-react"
 
+import { type ConnectionStatus, useHealthQuery } from "@/features/system"
 import { appConfig } from "@/shared/config/env"
 import { cn } from "@/shared/lib/utils"
 import { useUiStore } from "@/shared/store/ui-store"
@@ -10,42 +11,79 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip"
 /**
  * Ambient system truth along the bottom edge (docs/frontend/COMPONENT_HIERARCHY.md §7).
  *
- * The connection indicator is **presentational only** at this stage: the shell
- * milestone performs no network requests, so it reports `unknown` rather than
- * inventing a status. Wiring `GET /health` into `status` is the entire change
- * needed later — the display contract below does not move.
+ * The connection indicator is driven by the polled `/health` query. The shell
+ * stays presentational: it reads a derived status and renders it, while the
+ * polling, retry, and error semantics belong to the `system` slice.
+ *
+ * Also reports the *backend's* environment once known, which is the more useful
+ * fact than the client's build mode when the two disagree.
  */
-export type ConnectionStatus = "unknown" | "connected" | "degraded" | "offline"
 
-const STATUS_PRESENTATION: Record<ConnectionStatus, { label: string; className: string }> = {
-  unknown: { label: "Not connected", className: "text-muted-foreground" },
-  connected: { label: "Connected", className: "text-success" },
-  degraded: { label: "Degraded", className: "text-warning" },
-  offline: { label: "Offline", className: "text-destructive" },
+const STATUS_PRESENTATION: Record<
+  ConnectionStatus,
+  { label: string; className: string; hint: string }
+> = {
+  unknown: {
+    label: "Connecting…",
+    className: "text-muted-foreground",
+    hint: "Checking whether the backend is reachable",
+  },
+  connected: {
+    label: "Connected",
+    className: "text-success",
+    hint: "The backend is reachable and healthy",
+  },
+  degraded: {
+    label: "Degraded",
+    className: "text-warning",
+    hint: "The backend answered, but reported a problem",
+  },
+  offline: {
+    label: "Offline",
+    className: "text-destructive",
+    hint: "The backend could not be reached",
+  },
 }
 
-interface StatusBarProps {
-  status?: ConnectionStatus
-}
-
-export function StatusBar({ status = "unknown" }: StatusBarProps) {
+export function StatusBar() {
   const resetLayout = useUiStore((state) => state.resetLayout)
+  const { status, data, isFetching, refetch } = useHealthQuery()
+
   const presentation = STATUS_PRESENTATION[status]
+  const environment = data?.environment ?? appConfig.mode
+  const canRetry = status === "offline" || status === "degraded"
 
   return (
     <footer className="flex h-7 shrink-0 items-center gap-2 border-t bg-chrome px-2.5 text-2xs text-chrome-foreground">
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={cn("flex items-center gap-1.5", presentation.className)}>
-            <CircleDotIcon className="size-3" aria-hidden />
+          <span
+            role="status"
+            aria-live="polite"
+            className={cn("flex items-center gap-1.5", presentation.className)}
+          >
+            <CircleDotIcon className={cn("size-3", isFetching && "animate-pulse")} aria-hidden />
             <span>{presentation.label}</span>
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top">Backend at {appConfig.apiHost}</TooltipContent>
+        <TooltipContent side="top">
+          {presentation.hint} · {appConfig.apiHost}
+        </TooltipContent>
       </Tooltip>
 
+      {canRetry ? (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => void refetch()}
+          className="h-4 px-1 text-2xs text-chrome-foreground hover:text-foreground"
+        >
+          Retry
+        </Button>
+      ) : null}
+
       <Separator orientation="vertical" className="h-3!" />
-      <span>{appConfig.mode}</span>
+      <span>{environment}</span>
 
       <span className="flex-1" />
 

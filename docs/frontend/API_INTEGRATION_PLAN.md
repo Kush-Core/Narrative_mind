@@ -45,6 +45,20 @@ updateCharacter(id, patch) · deleteCharacter(id) · linkRelationship(id, body)`
 They build the request, call `httpClient`, and return **schema-validated** typed
 data. They contain no React and no caching — the frontend twin of a repository.
 
+> **As-built (M2):** the five CRUD functions are produced by a shared factory,
+> `createEntityResource({ collection, readSchema, toCreateBody, toUpdateBody,
+> toListQuery })` in `shared/api/resource.ts`, rather than being written out four
+> times. This is warranted because the four backend entity routers are
+> byte-for-byte parallel (a verified fact, not a forecast); the per-entity
+> differences are exactly the declarative arguments above. Non-CRUD endpoints
+> — `/health`, the graph reads, the Character-rooted relationship write — remain
+> plain hand-written resource functions, because they have no shared shape to
+> factor out.
+>
+> The factory also enforces gotcha #4 at the boundary: `update()` refuses to send
+> an empty body, and `diffForUpdate(original, next)` returns `null` when nothing
+> changed so the caller can skip the request entirely.
+
 **Query layer.** TanStack Query hooks wrap the resource functions with keys,
 caching, and invalidation (see [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md)).
 
@@ -179,6 +193,17 @@ Mapping rules (from the verified error contract, §Error Handling):
   - *Domain + transport errors* → non-blocking toast (shadcn Sonner) from a shared
     mutation error handler; read errors render an `ErrorState` in place with retry.
   - *Render-time failures* → `AppErrorBoundary` (recovery UI, shell survives).
+
+> **As-built (M2):** this policy is implemented as
+> `getErrorPresentation(error, context)` in `shared/api/error-presentation.ts`,
+> returning one of `field | inline | toast | silent`. The `silent` case covers
+> **canceled** requests: TanStack Query aborts in-flight reads on navigation and
+> param changes, so aborts are routine and are never shown as failures. Two codes
+> were added to the model beyond the table above — `canceled` (an abort) and
+> `parse` (the response did not match the schema the client expected, i.e. backend
+> contract drift). Failed mutations toast automatically via the QueryClient's
+> `MutationCache`; a mutation opts out with `meta: { suppressErrorToast: true }`
+> when it handles the error itself.
 - **404 semantics:** `getEntity` 404 → a dedicated "not found" detail state (the
   entity may have been deleted in another view), with a path back to the list.
 - **`conflict` (409):** defined and handled in the client even though the backend

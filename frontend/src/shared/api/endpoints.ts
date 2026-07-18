@@ -1,0 +1,65 @@
+/**
+ * Every backend path the app knows about, in one place.
+ *
+ * No endpoint string is written anywhere else. Resource modules compose these
+ * builders, so the backend's URL surface is greppable in a single file and a
+ * future change (an `/api/v1` prefix, a `worldId` segment — architecture §7.4)
+ * is one edit rather than a hunt.
+ *
+ * Paths only: *where* the backend lives is `appConfig.apiBaseUrl`, and the two
+ * are joined by the HTTP client.
+ *
+ * Mirrors the verified surface in docs/REPOSITORY_ANALYSIS.md §API Surface.
+ */
+
+import { encodePathSegment } from "@/shared/lib/url"
+
+/**
+ * Collection paths for the four entity resources. Kept as a named map so a
+ * resource module is configured with a key rather than a raw string.
+ */
+export const ENTITY_COLLECTIONS = {
+  characters: "/characters",
+  locations: "/locations",
+  factions: "/factions",
+  events: "/events",
+} as const
+
+export type EntityCollection = keyof typeof ENTITY_COLLECTIONS
+
+export const endpoints = {
+  system: {
+    health: () => "/health",
+  },
+
+  /**
+   * Generic CRUD paths for any entity collection. The four entity routers are
+   * byte-for-byte parallel (analysis §API Surface), so one builder serves all
+   * of them rather than four identical copies.
+   */
+  entity: (collection: EntityCollection) => ({
+    list: () => ENTITY_COLLECTIONS[collection],
+    create: () => ENTITY_COLLECTIONS[collection],
+    detail: (id: string) => `${ENTITY_COLLECTIONS[collection]}/${encodePathSegment(id)}`,
+  }),
+
+  /**
+   * Relationships are Character-rooted only — there is no generic
+   * `/{collection}/{id}/relationships` (analysis §API Surface), so this is
+   * deliberately not part of the generic entity builder above.
+   */
+  characters: {
+    relationships: (characterId: string) =>
+      `/characters/${encodePathSegment(characterId)}/relationships`,
+  },
+
+  graph: {
+    network: (characterId: string) => `/graph/characters/${encodePathSegment(characterId)}/network`,
+    shortestPath: () => "/graph/shortest-path",
+  },
+
+  ai: {
+    describe: () => "/ai/describe",
+    extract: () => "/ai/extract",
+  },
+} as const

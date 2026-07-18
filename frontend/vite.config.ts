@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { fileURLToPath, URL } from "node:url"
 
 import tailwindcss from "@tailwindcss/vite"
@@ -11,5 +12,14 @@ export default defineConfig({
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
+  },
+  test: {
+    // The API/schema layer is pure TypeScript — no DOM needed, so tests stay
+    // fast. A jsdom environment is added alongside this when component tests
+    // arrive (M3).
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+    setupFiles: ["src/test/setup.ts"],
+    restoreMocks: true,
   },
 })

@@ -47,7 +47,14 @@ frontend/
 ├── .prettierrc.json        Formatting (mirrors backend's "one formatter" stance)
 ├── .prettierignore
 └── .env / .env.example     VITE_API_BASE_URL etc. (client-safe config only)
+    .env.test               Pinned API origin for the test suite (committed)
 ```
+
+> **Test configuration (as-built, M2):** `vite.config.ts` also carries the
+> Vitest configuration (`test.*`), rather than a separate `vitest.config.ts` —
+> one config file, and the `@/*` alias is shared by definition. `.env.test` is
+> committed (unlike `.env`) so the suite is hermetic: MSW handlers and the HTTP
+> client always agree on the API origin regardless of local `.env` values.
 
 > **Tailwind v4 note (implementation reality):** there is intentionally **no
 > `tailwind.config.ts`**. Tailwind v4 is configured CSS-first — the design
@@ -78,6 +85,7 @@ src/
 ├── features/               Vertical feature slices (the bulk of the app)
 ├── shared/                 Cross-cutting core reused by ≥2 features
 ├── styles/                 Global CSS + token definitions
+├── test/                   Test harness: MSW server + handlers, Vitest setup (M2)
 └── types/                  Ambient/global TypeScript types (env, module shims)
 ```
 
@@ -179,8 +187,21 @@ features/
 │   └── pages/GraphExplorerPage.tsx, ShortestPathPage.tsx
 ├── world/                  Overview/home ("dashboard of nothing" avoided —
 │   └── pages/OverviewPage.tsx   world summary, recent activity, entry points)
+├── system/                 Backend liveness (/health) — see as-built note below
+│   ├── index.ts
+│   ├── model/health.schema.ts
+│   ├── api/system.api.ts
+│   └── queries/system.queries.ts
 └── ai/                     RESERVED — future (/ai/describe, /ai/extract). Empty now.
 ```
+
+> **`system/` slice (as-built, M2):** `/health` is not an entity, but it *is* a
+> backend resource with a schema, a resource function, and a polled query — so it
+> takes the standard slice shape rather than being special-cased into `shared/`.
+> It serves two purposes: it drives the status bar's connection indicator, and it
+> is the **reference implementation** of the schema→api→queries pattern that the
+> entity slices follow in M3/M4. It is deliberately tiny and holds no domain
+> logic.
 
 - **Purpose of `features/`:** house one self-contained vertical per capability.
 - **Responsibility of each slice:** own its schema → api → queries → ui end to end.
@@ -229,24 +250,59 @@ shared/
 │   ├── EntityForm.tsx      Generic RHF+Zod form driven by descriptor field specs
 │   ├── useEntityListQuery.ts   Generic list query hook
 │   └── useEntityMutations.ts    Generic create/update/delete + invalidation
-├── api/                    Transport & error core
-│   ├── http-client.ts      fetch wrapper: base URL, JSON, AbortSignal, auth seam
+├── api/                    Transport, error, and resource core
+│   ├── http-client.ts      fetch wrapper: base URL, headers, JSON, AbortSignal,
+│   │                       timeout, schema validation, auth seam
 │   ├── api-error.ts        Normalized ApiError type + both-shape parser
+│   ├── error-presentation.ts  Routing policy: field / inline / toast / silent
+│   ├── endpoints.ts        Every backend path, as builders (M2)
+│   ├── resource.ts         Generic entity resource factory + diffForUpdate (M2)
 │   ├── query-keys.ts       Central query-key registry/factory
+│   ├── invalidation.ts     Post-write cache-coherence policy (M2)
 │   └── auth.ts             AuthTokenProvider interface (inert seam — no auth now)
 ├── schemas/                Cross-cutting Zod primitives
 │   ├── page.schema.ts      Page<T> + client-side hasMore derivation
 │   ├── error.schema.ts     Domain envelope + FastAPI detail shapes
-│   └── primitives.ts       id, isoDate, non-empty-string, enums
+│   ├── list-params.schema.ts  Shared list-query contract + wire mapping (M2)
+│   └── primitives.ts       id, isoDate, name/text bounds, pagination bounds
+├── store/                  Zustand stores for global UI state (M1)
+│   └── ui-store.ts         Panel sizes, sidebar collapse, palette visibility
+├── types/                  Shared TypeScript types (M2)
+│   └── utility.ts          JsonValue, UnknownRecord, PartialBy, Prettify, …
 ├── hooks/                  Generic reusable hooks (useDebouncedValue, useHotkey,
 │   │                       useUrlListState, useMediaQuery)
-├── lib/                    Framework-agnostic utilities (cn(), casing mappers,
-│   │                       date format, invariant())
+├── lib/                    Framework-agnostic utilities
+│   ├── utils.ts            cn()
+│   ├── url.ts              Query-string + URL builders (M2)
+│   ├── casing.ts           snake_case ↔ camelCase mappers (M2)
+│   ├── pagination.ts       Offset→page-window helpers (M2)
+│   ├── date.ts             Defensive ISO parsing/formatting (M2)
+│   └── keyboard.ts         Shortcut parsing/matching/display (M1)
 ├── config/                 Runtime client config (env.ts reads import.meta.env once)
 └── commands/               Command/keyboard registry (feeds palette + shortcuts)
     ├── registry.ts
     └── useCommand.ts
 ```
+
+> **`store/` (as-built, M1):** this folder postdates the original design. Panel
+> geometry and palette visibility are read by both the shell and, later, feature
+> screens, so the store sits in `shared/` rather than in `app/`. The hard rule
+> from [STATE_MANAGEMENT.md](./STATE_MANAGEMENT.md) §4 still governs it: no
+> server data and nothing the URL owns may enter this store.
+>
+> **`api/resource.ts` (as-built, M2):** the *resource layer* generalization landed
+> in M2 rather than being extracted in M3. Justification: the backend's four
+> entity routers/services/repositories are byte-for-byte parallel — a **verified
+> fact** in [../REPOSITORY_ANALYSIS.md](../REPOSITORY_ANALYSIS.md), not a
+> prediction — so `createEntityResource` encodes a known contract (CRUD verbs,
+> offset pagination, PATCH-diff semantics) rather than a guess. The
+> *UI* generalization (`entity-kit`, descriptors) is unchanged: it stays deferred
+> to M3/M4, because UI shape is exactly what the backend has *not* already proven
+> uniform. See [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) M2/M3 as-built
+> notes.
+>
+> **`lib/invariant.ts` not built:** listed in the original design, never needed.
+> Per the promotion rule, it is added when a second caller wants it.
 
 - **Purpose:** the small, stable core every feature leans on.
 - **Why `ui/` vs `ui/composite/` split:** `ui/` holds *unopinionated* shadcn

@@ -70,6 +70,17 @@ is independently reviewable and leaves the app in a working state.
 - **Commit scope:** ~4–6 (layout, routing+paths, error boundary, command registry
   + palette, status bar).
 
+> **M1 as-built notes (2026-07-18):** the live `/health` StatusBar wiring listed
+> here **moved to M2** — the shell milestone was scoped to zero network requests,
+> and the indicator belongs with the network spine that feeds it. M1 shipped the
+> StatusBar's full four-state display contract driven by a prop; M2 supplied the
+> query. Also as-built: a `shared/store/ui-store.ts` Zustand store (persisted
+> panel geometry), a `RoutePlaceholder` element so every navigation destination
+> is walkable before its slice exists, and `app/shell/navigation.ts` as the single
+> navigation model projected by the sidebar, breadcrumbs, and palette. The
+> `CommandProvider` mounts inside `WorkspaceLayout` rather than `AppRoot`, because
+> it needs router context to navigate.
+
 ---
 
 ## M2 — API & schema foundation
@@ -95,6 +106,31 @@ is independently reviewable and leaves the app in a working state.
 - **Commit scope:** ~5–7 (http-client, error normalizer, page/error schemas,
   per-entity schemas+mappers, query-client+keys, MSW mocks/tests).
 
+> **M2 as-built notes (2026-07-18):**
+>
+> - **Per-entity schemas + mappers moved to M3.** This milestone was scoped to
+>   *reusable infrastructure only*, so the four entity schema sets ship with their
+>   slices instead. What landed in their place is the machinery they plug into:
+>   `createEntityResource` (generic CRUD resource factory), `listParamsSchema`
+>   (the shared list contract, narrowed per entity), `entityKeys` (per-collection
+>   query keys), and the invalidation policy. Each entity slice is now a schema
+>   plus four small mapper functions.
+> - **`system` slice added** as the reference implementation of
+>   schema→api→queries, and to complete M1's deferred `/health` wiring. It
+>   validated the whole spine end to end against a live server.
+> - **Error handling split in two:** `api-error.ts` *classifies* failures;
+>   `error-presentation.ts` *routes* them (field / inline / toast / silent). Failed
+>   mutations toast centrally through the `MutationCache`, with a
+>   `meta.suppressErrorToast` opt-out for forms that show errors inline.
+> - **Schema validation moved into the HTTP client.** Passing a schema to a
+>   request is what makes the resource layer's return type trustworthy; a schema
+>   mismatch surfaces as a distinct `parse` ApiError rather than leaking a Zod
+>   error, preserving the one-error-type guarantee.
+> - **Recorded versions:** Zod 4.4 · Vitest 4.1 · MSW 2.15.
+> - **Tests:** 71 covering each documented gotcha — the two 422 shapes, the
+>   `has_more` omission, empty-PATCH rejection, changed-fields-only diffing,
+>   timeout/abort/parse normalization, and the auth seam.
+
 ---
 
 ## M3 — First entity concrete, then the entity engine (Characters)
@@ -117,6 +153,16 @@ is independently reviewable and leaves the app in a working state.
   share; keep entity-specifics in slots, never engine conditionals.
 - **Commit scope:** ~6–8 (resource+queries, list, detail, form/create, edit/delete,
   optimism/invalidation, engine extraction).
+
+> **Scope note after M2:** the extraction step here is now **UI-only**. The
+> resource and query-key layers were generalized in M2 against the backend's
+> verified symmetry, so Characters starts by *instantiating*
+> `createEntityResource` + `entityKeys` rather than hand-rolling them. The
+> concrete-first discipline still applies where it matters — the list/detail/form
+> UI is built for Characters specifically, and only generalized once Locations
+> (M4) shows the real seam. M2's abstraction gets its first real consumer here;
+> if Characters reveals it does not fit, fixing it is cheap and localized because
+> nothing else depends on it yet.
 
 ---
 

@@ -1,16 +1,104 @@
 /**
- * Runtime client configuration, read from `import.meta.env` exactly once.
- * Everything else in the app imports `appConfig` — never `import.meta.env`.
+ * Runtime client configuration — the single boundary between `import.meta.env`
+ * and the rest of the app (docs/frontend/FRONTEND_FILE_STRUCTURE.md §3.5).
+ *
+ * Three rules hold this together:
+ *
+ *  1. **Nothing else in the app reads `import.meta.env`.** Everything imports
+ *     `appConfig`, so there is one place to see what the client is configured
+ *     with and one place to change how it is read.
+ *  2. **Validated at startup, not at first use.** A malformed
+ *     `VITE_API_BASE_URL` fails immediately and loudly with a message naming the
+ *     variable, rather than surfacing as a confusing 404 on the first request.
+ *  3. **No secrets.** Everything here is embedded in the browser bundle at build
+ *     time; only non-sensitive, `VITE_`-prefixed values may appear.
+ *
+ * Endpoint *paths* are not configured here — they belong to the backend
+ * contract and live in `shared/api/endpoints.ts`. This module owns only where
+ * the backend is and how the client behaves in a given environment.
  */
+
+import { z } from "zod"
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000"
 
-function normalizeBaseUrl(raw: string | undefined): string {
-  const value = raw?.trim() ? raw.trim() : DEFAULT_API_BASE_URL
+/**
+ * Environment-dependent client behaviour. Development favours fast feedback
+ * (short timeout, verbose failures); production favours resilience over a
+ * slower or less reliable network.
+ */
+interface RuntimeProfile {
+  /** Client-side deadline for a single request, in milliseconds. */
+  requestTimeoutMs: number
+  /** How often the status bar re-checks backend reachability, in milliseconds. */
+  healthPollIntervalMs: number
+  /** Log normalized API errors to the console as they are produced. */
+  logApiErrors: boolean
+}
+
+const DEVELOPMENT_PROFILE: RuntimeProfile = {
+  requestTimeoutMs: 15_000,
+  healthPollIntervalMs: 30_000,
+  logApiErrors: true,
+}
+
+const PRODUCTION_PROFILE: RuntimeProfile = {
+  requestTimeoutMs: 30_000,
+  healthPollIntervalMs: 60_000,
+  logApiErrors: false,
+}
+
+/**
+ * `VITE_API_BASE_URL` must be an absolute http(s) URL. A relative value would
+ * silently resolve against whatever origin happens to serve the app, which is a
+ * deployment bug that only shows up in production.
+ */
+const EnvSchema = z.object({
+  VITE_API_BASE_URL: z
+    .string()
+    .trim()
+    .min(1)
+    .refine(
+      (value) => {
+        try {
+          const url = new URL(value)
+          return url.protocol === "http:" || url.protocol === "https:"
+        } catch {
+          return false
+        }
+      },
+      { message: "must be an absolute http(s) URL, for example http://localhost:8000" },
+    )
+    .default(DEFAULT_API_BASE_URL),
+})
+
+/** Trailing slashes are stripped so path joining is unambiguous everywhere else. */
+function stripTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value
 }
 
-const apiBaseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
+function readEnv(source: ImportMetaEnv) {
+  const result = EnvSchema.safeParse(source)
+  if (!result.success) {
+    const detail = result.error.issues
+      .map((issue) => `${issue.path.join(".") || "env"}: ${issue.message}`)
+      .join("; ")
+    throw new Error(
+      `Invalid client configuration — ${detail}. Check your .env against .env.example.`,
+    )
+  }
+  return result.data
+}
+
+const env = readEnv(import.meta.env)
+const apiBaseUrl = stripTrailingSlash(env.VITE_API_BASE_URL)
+const isDev = import.meta.env.DEV
+const isTest = import.meta.env.MODE === "test"
+const profile: RuntimeProfile = isDev
+  ? // Tests deliberately provoke failures, so error logging is off there — the
+    // assertions are the report, and a passing suite should be quiet.
+    { ...DEVELOPMENT_PROFILE, logApiErrors: !isTest }
+  : PRODUCTION_PROFILE
 
 export const appConfig = {
   appName: "Narrative Mind",
@@ -19,7 +107,9 @@ export const appConfig = {
   apiDocsUrl: `${apiBaseUrl}/docs`,
   apiHost: new URL(apiBaseUrl).host,
   mode: import.meta.env.MODE,
-  isDev: import.meta.env.DEV,
+  isDev,
+  isProd: import.meta.env.PROD,
+  ...profile,
 } as const
 
 export type AppConfig = typeof appConfig
