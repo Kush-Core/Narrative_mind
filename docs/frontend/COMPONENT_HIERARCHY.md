@@ -133,9 +133,19 @@ an entity, never a specific one.
 |---|---|
 | **EntityListView** | Full list screen body: reads URL list-state, runs `useEntityListQuery`, renders `DataTable` from descriptor columns, filter controls (from descriptor filters), sort controls (descriptor sortable fields only), pagination (offset + derived `hasMore`), and the empty/error/loading states |
 | **EntityDetailView** | Renders one entity's fields from the descriptor; hosts edit/delete actions and entity-specific **slots** |
-| **EntityForm** | RHF + Zod form generated from the descriptor's field specs; handles create vs. edit (diffing for updates); maps server `fieldErrors` back to fields |
-| **useEntityListQuery** | Generic list query hook (key from normalized URL input) |
-| **useEntityMutations** | Generic create/update/delete with optimistic detail patch + list invalidation |
+| **EntityForm** | RHF + Zod form generated from the descriptor's field specs; maps server `fieldErrors` back to fields |
+| **EntityFormDialog** | Hosts `EntityForm` for **both** create and edit; mode is derived from whether an entity was passed, so the two cannot diverge (M3) |
+| **useEntityListQuery / useEntityQuery** | Generic list and detail query hooks (key from normalized URL input) |
+| **useEntityMutations** | Generic create/update/delete with detail patch + list invalidation |
+
+> **As-built (M3) — two engine behaviours worth knowing:**
+>
+> - **The empty list has two meanings.** "Nothing exists yet" (offer *create*)
+>   and "nothing matches your filters" (offer *clear filters*) are different
+>   situations needing different actions, so `EntityListView` distinguishes them.
+> - **Enum fields render their label, not their wire value.** `EntityDetailView`
+>   resolves a field's value through the same `options` the form offers, so a
+>   reader sees "Alive" rather than `alive` and the two surfaces cannot disagree.
 
 **The `EntityDescriptor` is the contract.** It declares, per entity: identity
 (name, route base, endpoint path), Zod schemas + wire mappers, field specs (label,

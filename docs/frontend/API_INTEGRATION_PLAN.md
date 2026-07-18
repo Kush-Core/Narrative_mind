@@ -250,6 +250,14 @@ Owned by TanStack Query state, expressed through shared UI states:
   rather than surgically patched, because `total` and page membership shift; detail
   keys are patched optimistically.
 
+> **As-built (M3) — where the optimism line was actually drawn:**
+> create and delete are **not** optimistic, because both change `total` and page
+> membership; a predicted list would be visibly wrong (a row in the wrong sort
+> position, a stale count). Update **is** optimistic, but only on the detail key,
+> where the new value is known exactly and the blast radius is one screen.
+> Separately, an update whose diff is empty issues **no request at all** and
+> reports "No changes to save" — it must not claim a save that never happened.
+
 ---
 
 ## 7. Retry strategy

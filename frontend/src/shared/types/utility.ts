@@ -31,7 +31,13 @@ export type Prettify<T> = { -readonly [K in keyof T]: T[K] } & {}
 /** A value that may arrive synchronously or as a promise. */
 export type Awaitable<T> = T | Promise<T>
 
-/** Anything with an `id` — the minimum contract every backend entity satisfies. */
-export interface Identifiable {
+/**
+ * Anything with an `id` — the minimum contract every backend entity satisfies.
+ *
+ * A type alias rather than an interface, deliberately: aliases carry an implicit
+ * index signature, so generic code constrained to `Identifiable` can still read
+ * fields by name without an assertion.
+ */
+export type Identifiable = {
   id: string
 }

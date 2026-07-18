@@ -69,7 +69,6 @@ export const navSections: NavSection[] = [
         icon: UsersIcon,
         accentClassName: "text-entity-character",
         shortcut: "g c",
-        pending: true,
       },
       {
         id: "locations",

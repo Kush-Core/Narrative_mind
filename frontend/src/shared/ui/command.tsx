@@ -51,7 +51,10 @@ function CommandDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <Command className="[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group]]:px-2">
+        {/* Group padding is dialog-specific. Heading padding is not repeated
+            here — `CommandGroup` already applies it, and duplicating the rule
+            only creates two places to change it. */}
+        <Command className="[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 **:[[cmdk-group]]:px-2">
           {children}
         </Command>
       </DialogContent>
@@ -112,7 +115,10 @@ function CommandGroup({
     <CommandPrimitive.Group
       data-slot="command-group"
       className={cn(
-        "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-2xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:uppercase",
+        // cmdk renders the group heading itself, so it can only be styled from
+        // here as a descendant. `**:` is Tailwind v4's canonical descendant
+        // variant — the older `[&_…]` arbitrary form compiles identically.
+        "overflow-hidden p-1 text-foreground **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:py-1.5 **:[[cmdk-group-heading]]:text-2xs **:[[cmdk-group-heading]]:font-medium **:[[cmdk-group-heading]]:tracking-wider **:[[cmdk-group-heading]]:text-muted-foreground **:[[cmdk-group-heading]]:uppercase",
         className,
       )}
       {...props}

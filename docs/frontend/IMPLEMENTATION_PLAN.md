@@ -164,6 +164,36 @@ is independently reviewable and leaves the app in a working state.
 > if Characters reveals it does not fit, fixing it is cheap and localized because
 > nothing else depends on it yet.
 
+> **M3 as-built notes (2026-07-18):**
+>
+> - **M2's resource abstraction fit unchanged.** `createEntityResource` needed no
+>   modification to serve Characters; the slice's `api/` module is 25 lines.
+> - **`entity-kit` built descriptor-first, not extracted.** The plan called for
+>   building Characters concretely and then extracting. In practice the
+>   descriptor contract was written first and Characters expressed through it
+>   immediately, because M2 had already proven where the seams are (resource,
+>   keys, list params) and a concrete-then-refactor pass would have produced the
+>   same result with an extra rewrite. **The risk this trades into M4 is real and
+>   accepted:** the descriptor has exactly one consumer, so Locations may reveal
+>   gaps. The guardrail holds — entity specifics enter only through descriptor
+>   data and slots, and `entity-kit/` contains no per-entity conditional.
+> - **`EntityFormDialog` added** to the kit (not in the original component
+>   hierarchy). Create and edit differ only in seed values and which mutation
+>   runs, so hosting both in one component makes "editing reuses the creation
+>   form" structural rather than conventional.
+> - **Optimism, decided:** create and delete are *not* optimistic (both shift
+>   `total` and page membership); update patches the detail key only. An
+>   unchanged save issues **no request at all** and says so.
+> - **Routing:** feature routes use React Router's own `lazy` route property
+>   rather than `React.lazy` + `Suspense` — the router keeps the current view on
+>   screen while the next chunk loads, a better transition than a fallback.
+> - **Deferred deliberately:** component-level tests need jsdom +
+>   Testing Library. Logic is covered by 107 unit/integration tests, and the UI
+>   flows were verified by driving a real browser against a faithful API stub.
+>   Component tests are a candidate for M8.
+> - **Recorded versions:** React Hook Form 7.82 · @hookform/resolvers 5.4 ·
+>   TanStack Table 8.21.
+
 ---
 
 ## M4 — Fan out remaining entities via descriptors (Locations, Factions, Events)

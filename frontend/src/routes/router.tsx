@@ -12,17 +12,23 @@ import { RoutePlaceholder } from "@/routes/route-placeholder"
  * layout route mounts the persistent shell; every child renders into its
  * `<Outlet/>`.
  *
- * The full URL contract is mounted now so navigation is genuinely walkable,
- * with `RoutePlaceholder` standing in for the feature slices. As each slice
- * lands (M3+) it replaces its own `element` with a lazily-loaded page and
- * nothing else in this file changes.
+ * Feature routes use React Router's own `lazy` property rather than
+ * `React.lazy` + `Suspense`: the router already knows how to defer a route and
+ * keeps the current view on screen while the next chunk downloads, which is a
+ * better transition than swapping in a fallback. Each slice is still its own
+ * chunk, so the graph feature's eventual visualization dependency never lands
+ * in the initial bundle (docs/frontend/FRONTEND_ARCHITECTURE.md §7.3).
+ *
+ * Slices not yet built mount `RoutePlaceholder`, so every navigation
+ * destination stays walkable.
  *
  * The error element sits on a pathless route *inside* the layout so a failing
  * view is replaced in place while the shell stays alive. If the layout itself
  * throws, the same element renders standalone at the root.
  */
+
+/** Destinations whose slices are still to come (M4+). */
 const placeholderPaths = [
-  paths.characters.list(),
   paths.locations.list(),
   paths.factions.list(),
   paths.events.list(),
@@ -40,6 +46,22 @@ export const router = createBrowserRouter([
         errorElement: <RouteErrorRoute />,
         children: [
           { index: true, element: <WorkspaceWelcome /> },
+
+          {
+            path: paths.characters.list(),
+            lazy: async () => {
+              const { CharacterListPage } = await import("@/features/characters")
+              return { Component: CharacterListPage }
+            },
+          },
+          {
+            path: paths.characters.detail(":characterId"),
+            lazy: async () => {
+              const { CharacterDetailPage } = await import("@/features/characters")
+              return { Component: CharacterDetailPage }
+            },
+          },
+
           ...placeholderPaths.map((path) => ({ path, element: <RoutePlaceholder /> })),
           { path: "*", element: <NotFoundRoute /> },
         ],

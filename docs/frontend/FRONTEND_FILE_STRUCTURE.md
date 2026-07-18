@@ -239,16 +239,22 @@ shared/
 ├── ui/                     Design-system primitives (shadcn/ui output) + tokens usage
 │   ├── button.tsx, dialog.tsx, command.tsx, table.tsx, …   (generated primitives)
 │   └── composite/          App-level composites built FROM primitives
-│       ├── DataTable.tsx           headless-table + shadcn markup
+│       ├── DataTable.tsx           TanStack Table + shadcn markup, server-sorted
+│       ├── PaginationControls.tsx  offset paging in page/range terms (M3)
+│       ├── SearchInput.tsx         debounced search box (M3)
+│       ├── FormField.tsx           label + control + message wiring (M3)
+│       ├── TagsInput.tsx           string-list control, backend-matched dedupe (M3)
+│       ├── PageHeader.tsx / Toolbar.tsx / SectionLabel.tsx / Kbd.tsx
 │       ├── ConfirmDialog.tsx
-│       ├── EmptyState.tsx / ErrorState.tsx / LoadingState.tsx
-│       └── EntityPicker.tsx        (search-select over any entity's list API)
+│       ├── StatePanel.tsx → EmptyState.tsx / ErrorState.tsx / LoadingState.tsx
+│       └── EntityPicker.tsx        (M5 — search-select over any entity's list API)
 ├── entity-kit/             The GENERIC entity engine (architecture D3)
-│   ├── types.ts            EntityDescriptor<TRead, TCreate, TUpdate> contract
-│   ├── EntityListView.tsx  Generic list: table, filters, sort, pagination
-│   ├── EntityDetailView.tsx
+│   ├── types.ts            EntityDescriptor contract + BaseListParams
+│   ├── EntityListView.tsx  Generic list: table, filters, sort, pagination, states
+│   ├── EntityDetailView.tsx  Generic detail: fields, meta, slots, 404 state
 │   ├── EntityForm.tsx      Generic RHF+Zod form driven by descriptor field specs
-│   ├── useEntityListQuery.ts   Generic list query hook
+│   ├── EntityFormDialog.tsx  Create/edit host — one form, two modes (M3)
+│   ├── useEntityQueries.ts   Generic list + detail query hooks
 │   └── useEntityMutations.ts    Generic create/update/delete + invalidation
 ├── api/                    Transport, error, and resource core
 │   ├── http-client.ts      fetch wrapper: base URL, headers, JSON, AbortSignal,
