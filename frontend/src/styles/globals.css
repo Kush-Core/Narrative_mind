@@ -37,6 +37,10 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  --color-chrome: var(--chrome);
+  --color-chrome-foreground: var(--chrome-foreground);
+  --color-overlay: var(--overlay);
+
   --color-entity-character: var(--entity-character);
   --color-entity-location: var(--entity-location);
   --color-entity-faction: var(--entity-faction);
@@ -60,6 +64,53 @@
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Typography scale — tuned denser and tighter than Tailwind's defaults so the
+   * workspace reads like a tool. `2xs` is additive (chrome labels, kbd chips,
+   * status bar); the rest override the default line-heights only. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-2xs--letter-spacing: 0.01em;
+  --text-xs--line-height: 1.125rem;
+  --text-sm--line-height: 1.3125rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.625rem;
+  --text-lg--letter-spacing: -0.01em;
+  --text-xl--letter-spacing: -0.015em;
+  --text-2xl--letter-spacing: -0.02em;
+
+  --shadow-panel: var(--shadow-panel);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+
+  /* Easing tokens surfaced as Tailwind utilities (`ease-standard`, `ease-exit`)
+   * so transitions are declared from the token set, never ad hoc. Durations are
+   * applied through the `transition-chrome` utility below. */
+  --ease-standard: var(--ease-standard);
+  --ease-exit: var(--ease-exit);
+}
+
+/*
+ * State-communicating motion, expressed once (docs/frontend/COMPONENT_HIERARCHY.md
+ * §2). Chrome that opens, collapses, or highlights uses this; nothing decorative
+ * animates. Respects `prefers-reduced-motion`.
+ */
+/*
+ * The one focus treatment in the app. Keyboard-first means focus is seen
+ * constantly, so it is defined once here rather than repeated as a class string
+ * on every interactive element (shadcn primitives carry the same ring inline).
+ */
+@utility focus-ring {
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+  }
+}
+
+@utility transition-chrome {
+  transition-property: color, background-color, border-color, opacity, transform;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-standard);
 }
 
 @layer base {
@@ -73,5 +124,23 @@
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    /* A desktop workspace owns the viewport; the shell scrolls its own panes. */
+    overscroll-behavior: none;
+  }
+
+  /* Scrollbars are part of the chrome, not the browser's default furniture. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }

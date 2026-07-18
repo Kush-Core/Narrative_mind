@@ -43,6 +43,14 @@
   --input: oklch(0.28 0.008 260);
   --ring: oklch(0.6 0.1 285);
 
+  /* ------------------------------------------------------------------ chrome */
+  /* The persistent frame (command bar, status bar, panel headers) reads a
+   * half-step darker than the canvas so the work surface is the brightest
+   * thing on screen — an IDE convention, not a dashboard one. */
+  --chrome: oklch(0.165 0.008 260);
+  --chrome-foreground: oklch(0.72 0.01 260);
+  --overlay: oklch(0.11 0.01 260 / 0.72);
+
   /* --------------------------------------------- entity identity (learnable) */
   --entity-character: oklch(0.75 0.12 300); /* violet   */
   --entity-location: oklch(0.75 0.1 165); /* teal     */
@@ -60,7 +68,23 @@
   --sidebar-ring: var(--ring);
 
   /* ------------------------------------------------------------------- shape */
+  /* Modest radii: workspace chrome reads as panels and tools, not as cards on
+   * a marketing page. Pills are reserved for nothing; tags are squared. */
   --radius: 0.5rem;
+
+  /* --------------------------------------------------------------- elevation */
+  /* Depth is carried by surface level + hairline borders; shadows appear only
+   * where something genuinely floats above the workspace. */
+  --shadow-panel: 0 1px 0 0 oklch(0.1 0.01 260 / 0.5);
+  --shadow-raised: 0 1px 2px 0 oklch(0.08 0.01 260 / 0.4);
+  --shadow-overlay:
+    0 12px 32px -8px oklch(0.06 0.01 260 / 0.7), 0 0 0 1px oklch(0.32 0.01 260 / 0.6);
+
+  /* ------------------------------------------------------ layout constants */
+  --chrome-bar-height: 2.75rem; /* command bar */
+  --status-bar-height: 1.75rem;
+  --sidebar-width: 15rem;
+  --sidebar-width-collapsed: 3rem;
 
   /* ------------------------------------------------- motion (state-communicating) */
   --duration-fast: 120ms;
