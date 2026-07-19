@@ -1,4 +1,5 @@
-import { createBrowserRouter } from "react-router-dom"
+import type { ComponentType } from "react"
+import { createBrowserRouter, type RouteObject } from "react-router-dom"
 
 import { WorkspaceLayout } from "@/app/shell/WorkspaceLayout"
 import { WorkspaceWelcome } from "@/app/shell/WorkspaceWelcome"
@@ -6,6 +7,7 @@ import { NotFoundRoute } from "@/routes/not-found"
 import { paths } from "@/routes/paths"
 import { RouteErrorRoute } from "@/routes/route-error"
 import { RoutePlaceholder } from "@/routes/route-placeholder"
+import { ENTITY_ID_PARAM } from "@/shared/entity-kit/route-params"
 
 /**
  * The route tree (docs/frontend/FRONTEND_FILE_STRUCTURE.md §3.2). The root
@@ -27,13 +29,33 @@ import { RoutePlaceholder } from "@/routes/route-placeholder"
  * throws, the same element renders standalone at the root.
  */
 
+/**
+ * The list + detail route pair every entity slice mounts.
+ *
+ * Beyond removing four repetitions, this makes one coupling structural: the
+ * detail param is named `:id` here and *only* here, and
+ * `EntityDetailPage` reads exactly that name. Spelled out per entity, a
+ * `:factionId` typo would compile, route, and then fail at runtime with an
+ * undefined id. There is now one place to get it right.
+ *
+ * Both routes await the same dynamic import; the module is cached after the
+ * first, and only one of the two ever matches a given URL.
+ */
+function entityRoutes(
+  routes: { list: () => string; detail: (id: string) => string },
+  load: () => Promise<{ list: ComponentType; detail: ComponentType }>,
+): RouteObject[] {
+  return [
+    { path: routes.list(), lazy: async () => ({ Component: (await load()).list }) },
+    {
+      path: routes.detail(`:${ENTITY_ID_PARAM}`),
+      lazy: async () => ({ Component: (await load()).detail }),
+    },
+  ]
+}
+
 /** Destinations whose slices are still to come (M5+). */
-const placeholderPaths = [
-  paths.factions.list(),
-  paths.events.list(),
-  paths.graph.explorer(),
-  paths.graph.shortestPath(),
-]
+const placeholderPaths = [paths.events.list(), paths.graph.explorer(), paths.graph.shortestPath()]
 
 export const router = createBrowserRouter([
   {
@@ -46,35 +68,20 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <WorkspaceWelcome /> },
 
-          {
-            path: paths.characters.list(),
-            lazy: async () => {
-              const { CharacterListPage } = await import("@/features/characters")
-              return { Component: CharacterListPage }
-            },
-          },
-          {
-            path: paths.characters.detail(":characterId"),
-            lazy: async () => {
-              const { CharacterDetailPage } = await import("@/features/characters")
-              return { Component: CharacterDetailPage }
-            },
-          },
+          ...entityRoutes(paths.characters, async () => {
+            const slice = await import("@/features/characters")
+            return { list: slice.CharacterListPage, detail: slice.CharacterDetailPage }
+          }),
 
-          {
-            path: paths.locations.list(),
-            lazy: async () => {
-              const { LocationListPage } = await import("@/features/locations")
-              return { Component: LocationListPage }
-            },
-          },
-          {
-            path: paths.locations.detail(":locationId"),
-            lazy: async () => {
-              const { LocationDetailPage } = await import("@/features/locations")
-              return { Component: LocationDetailPage }
-            },
-          },
+          ...entityRoutes(paths.locations, async () => {
+            const slice = await import("@/features/locations")
+            return { list: slice.LocationListPage, detail: slice.LocationDetailPage }
+          }),
+
+          ...entityRoutes(paths.factions, async () => {
+            const slice = await import("@/features/factions")
+            return { list: slice.FactionListPage, detail: slice.FactionDetailPage }
+          }),
 
           ...placeholderPaths.map((path) => ({ path, element: <RoutePlaceholder /> })),
           { path: "*", element: <NotFoundRoute /> },

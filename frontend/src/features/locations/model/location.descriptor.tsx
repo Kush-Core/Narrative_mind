@@ -14,8 +14,14 @@ import {
 } from "@/features/locations/model/location.schema"
 import { paths } from "@/routes/paths"
 import { entityKeys } from "@/shared/api/query-keys"
+import {
+  createdAtColumn,
+  createdAtMeta,
+  identifierMeta,
+  nameColumn,
+  truncatedTextColumn,
+} from "@/shared/entity-kit/columns"
 import type { EntityDescriptor } from "@/shared/entity-kit/types"
-import { formatDateTime } from "@/shared/lib/date"
 
 /**
  * Everything specific about Locations, in one declaration.
@@ -79,49 +85,24 @@ export const locationDescriptor: EntityDescriptor<Location, LocationForm, Locati
   // Column ids that are sortable must match the backend's whitelist exactly,
   // or the sort would be silently ignored server-side.
   columns: [
+    nameColumn({ get: (location) => location.name }),
     {
-      id: "name",
-      header: "Name",
-      sortable: true,
-      cell: (location) => <span className="font-medium text-foreground">{location.name}</span>,
-    },
-    {
+      // A region is a short label, so it reads as a badge rather than as prose —
+      // the escape hatch the shared text column leaves open.
       id: "region",
       header: "Region",
       sortable: true,
       cell: (location) => <RegionBadge region={location.region} />,
     },
-    {
+    truncatedTextColumn({
       id: "description",
       header: "Description",
-      cell: (location) => (
-        <span className="block max-w-md truncate text-muted-foreground">
-          {location.description ?? "—"}
-        </span>
-      ),
-    },
-    {
-      id: "created_at",
-      header: "Created",
-      sortable: true,
-      cell: (location) => (
-        <span className="text-muted-foreground">{formatDateTime(location.createdAt)}</span>
-      ),
-    },
+      get: (location) => location.description,
+    }),
+    createdAtColumn((location) => location.createdAt),
   ],
 
-  meta: [
-    {
-      id: "createdAt",
-      label: "Created",
-      value: (location) => formatDateTime(location.createdAt),
-    },
-    {
-      id: "id",
-      label: "Identifier",
-      value: (location) => <code className="font-mono text-xs">{location.id}</code>,
-    },
-  ],
+  meta: [createdAtMeta((location) => location.createdAt), identifierMeta()],
 
   sortableFields: LOCATION_SORT_FIELDS,
 

@@ -85,7 +85,6 @@ export const navSections: NavSection[] = [
         icon: FlagIcon,
         accentClassName: "text-entity-faction",
         shortcut: "g f",
-        pending: true,
       },
       {
         id: "events",

@@ -242,6 +242,53 @@ is independently reviewable and leaves the app in a working state.
 >   field with `""`, delete, and the subsequent 404 — plus 28 new mocked
 >   unit/integration tests (140 total).
 
+> **M4 as-built notes — Factions + consolidation (2026-07-19).** Events still to come.
+>
+> The milestone had two goals: ship Faction, and consolidate what three parallel
+> entities had revealed. Faction itself required **no new infrastructure** — it is
+> a schema, an 8-line resource config, a descriptor, and two 3-line pages.
+>
+> **What was consolidated, and why each earned it:**
+>
+> - **`EntityListPage` / `EntityDetailPage`** — the per-entity pages were
+>   byte-identical apart from the entity name. ~200 lines across three slices
+>   became ~120 shared, and the delete confirmation now titles itself with
+>   `getTitle` rather than assuming a `name` field.
+> - **`entity-kit/columns.tsx`** — the name / truncated-text / created-at columns
+>   and the created-at / identifier meta rows were written out in every
+>   descriptor. Now builders; the two genuinely distinct cells (Character's alias
+>   sub-label, Location's region badge) stay hand-written, which is the escape
+>   hatch working as intended.
+> - **`shared/schemas/wire.ts`** — `emptyToNull` was duplicated verbatim, and each
+>   update mapper was a hand-rolled `if (x !== undefined)` chain. `pickDefined`
+>   replaces the chain with an explicit writable-field allow-list, making the
+>   "never echo `display_name`" rule structural (gotcha #5).
+> - **`entityRoutes()` in the router** — four near-identical lazy blocks became one
+>   helper, and the `:id` param name now comes from a shared constant that
+>   `EntityDetailPage` reads. Previously a `:factionId` typo would compile, route,
+>   and fail at runtime.
+>
+> **What was deliberately *not* consolidated:** the entity schemas. They are the
+> anti-corruption boundary, their bounds and comments are entity-specific
+> knowledge, and a schema-generating factory would trade clarity for line count.
+>
+> **A regression caught by checking the build, not the types.** Importing the
+> shared `:id` constant from `EntityCrudPages` pulled the entire entity-kit
+> (~137 kB) out of its lazy chunk into the eager bundle — typecheck, lint, and
+> all 180 tests passed while initial load grew 22%. The constant moved to a
+> dependency-free leaf module (`entity-kit/route-params.ts`, which carries a
+> comment saying why it must stay that way) and the chunk split was restored.
+> Bundle output is now part of the verification checklist.
+>
+> **Net effect on the slices:** characters 5.42 kB → 3.90 kB, locations 3.89 kB →
+> 2.52 kB, factions 2.37 kB — each entity is now mostly declaration.
+>
+> **Verified against the live stack:** full Faction CRUD (create, read, search,
+> ideology filter, sort, two-page pagination, partial update, clear-with-`""`,
+> delete, 404), plus explicit regression checks that the retrofitted Character and
+> Location still dedupe aliases, map nulls, clear with `""`, and never echo
+> `display_name`. 40 new mocked tests (180 total).
+
 ---
 
 ## M5 — Relationships (Character-rooted graph writes)

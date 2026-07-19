@@ -141,6 +141,27 @@ Each is a fact from the analysis, with the required handling:
    diff is empty, the client short-circuits without a request.
 5. **`display_name` is a read-only computed field** on Character responses. It is
    parsed for display but stripped from any `toWire` body (never echoed on write).
+   *As-built (M4):* stripping is now structural rather than remembered. Every
+   entity's update mapper is `pickDefined(patch, WRITABLE_FIELDS)`
+   (`shared/schemas/wire.ts`), so a field reaches the wire only if it appears on
+   an explicit allow-list. Computed and server-owned fields are excluded by
+   omission rather than by each mapper deleting them.
+
+> **As-built (M4) — the two write asymmetries live in one module.** Gotchas #3
+> and #5 were being re-implemented per entity. Both now sit in
+> `shared/schemas/wire.ts`:
+>
+> - `emptyToNull(value)` — **create only.** An untouched input is `""`, but these
+>   fields are `str | None` defaulting to `None`, so a blank must become `null`.
+> - `pickDefined(patch, writableFields)` — **update only.** The reverse rule
+>   applies: `exclude_none=True` would drop a `null`, so a deliberate clear is
+>   sent as `""` and passed through untouched. `undefined` means "not in this
+>   patch" and is omitted.
+>
+> Getting either backwards silently corrupts a write — a cleared field that
+> quietly keeps its old value, or an empty string stored where "not set" was
+> meant. That is why they are one tested module rather than a convention each
+> schema restates.
 6. **`created_at` is a plain ISO string**, not a guaranteed typed datetime. The
    schema parses it as an ISO string and formatting is done defensively.
 7. **Sort whitelist differs per entity and invalid sorts silently fall back to
@@ -152,6 +173,8 @@ Each is a fact from the analysis, with the required handling:
    are exact string equality with no way to enumerate values server-side; the UI
    treats them as exact-match inputs (with values discovered from loaded data as an
    aid), and positions `name_contains` as the primary discovery filter.
+   *As-built (M4):* Faction's `ideology` is the third instance and needed no new
+   code — `kind: "text"`, same as `region`.
    *As-built (M4):* this is the `EntityFilterSpec` `kind` discriminator —
    `status` is `kind: "select"`, `region` is `kind: "text"` (a debounced input).
    Suggesting values from loaded data was **not** built: the only values available

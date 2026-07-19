@@ -25,6 +25,7 @@ import {
   IsoDateStringSchema,
   LongTextSchema,
 } from "@/shared/schemas/primitives"
+import { emptyToNull, pickDefined } from "@/shared/schemas/wire"
 import type { UnknownRecord } from "@/shared/types/utility"
 
 /* -------------------------------------------------------------- form model */
@@ -112,6 +113,9 @@ export function toLocationCreateBody(form: LocationForm): UnknownRecord {
   }
 }
 
+/** Every field a client may write. Nothing else can reach an update body. */
+const WRITABLE_FIELDS = ["name", "region", "description"] as const
+
 /**
  * Form patch → update body.
  *
@@ -120,14 +124,10 @@ export function toLocationCreateBody(form: LocationForm): UnknownRecord {
  * Note the asymmetry with create: the backend dumps updates with
  * `exclude_none=True`, so a `null` would be **dropped rather than clearing the
  * field** (gotcha #3). Clearing a region or description is therefore expressed
- * as the empty string, which the backend does store.
+ * as the empty string, which `pickDefined` passes through untouched.
  */
 export function toLocationUpdateBody(patch: Partial<LocationForm>): UnknownRecord {
-  const body: UnknownRecord = {}
-  if (patch.name !== undefined) body.name = patch.name
-  if (patch.region !== undefined) body.region = patch.region
-  if (patch.description !== undefined) body.description = patch.description
-  return body
+  return pickDefined(patch, WRITABLE_FIELDS)
 }
 
 /** Read model → form values, for the edit flow. */
@@ -137,8 +137,4 @@ export function toLocationForm(location: Location): LocationForm {
     region: location.region ?? "",
     description: location.description ?? "",
   }
-}
-
-function emptyToNull(value: string): string | null {
-  return value.trim() === "" ? null : value
 }

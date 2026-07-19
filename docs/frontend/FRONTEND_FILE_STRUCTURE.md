@@ -175,7 +175,7 @@ features/
 │       ├── CharacterListPage.tsx  (thin: descriptor → generic EntityListView)
 │       └── CharacterDetailPage.tsx
 ├── locations/              (same shape; region filter (text); no relationships)
-├── factions/               (same shape; ideology filter)
+├── factions/               (same shape; ideology filter (text); no relationships)
 ├── events/                 (same shape; timeline_order sort; no categorical filter)
 ├── graph/                  Relationship/graph reasoning surface
 │   ├── index.ts

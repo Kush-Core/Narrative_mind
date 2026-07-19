@@ -16,8 +16,14 @@ import {
 } from "@/features/characters/model/character.schema"
 import { paths } from "@/routes/paths"
 import { entityKeys } from "@/shared/api/query-keys"
+import {
+  createdAtColumn,
+  createdAtMeta,
+  identifierMeta,
+  nameColumn,
+  truncatedTextColumn,
+} from "@/shared/entity-kit/columns"
 import type { EntityDescriptor } from "@/shared/entity-kit/types"
-import { formatDateTime } from "@/shared/lib/date"
 
 /**
  * Everything specific about Characters, in one declaration.
@@ -88,45 +94,29 @@ export const characterDescriptor: EntityDescriptor<Character, CharacterForm, Cha
     // Column ids that are sortable must match the backend's whitelist exactly,
     // or the sort would be silently ignored server-side.
     columns: [
-      {
-        id: "name",
-        header: "Name",
-        sortable: true,
-        cell: (character) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{character.name}</span>
-            {character.aliases.length > 0 ? (
-              <span className="text-2xs text-muted-foreground">
-                {character.aliases[0]}
-                {character.aliases.length > 1 ? ` +${character.aliases.length - 1}` : ""}
-              </span>
-            ) : null}
-          </div>
-        ),
-      },
+      nameColumn({
+        get: (character) => character.name,
+        // Aliases are identity for a character, so the primary one earns a place
+        // in the list — the escape hatch the shared builder leaves open.
+        secondary: (character) =>
+          character.aliases.length > 0
+            ? `${character.aliases[0]}${
+                character.aliases.length > 1 ? ` +${character.aliases.length - 1}` : ""
+              }`
+            : null,
+      }),
       {
         id: "status",
         header: "Status",
         sortable: true,
         cell: (character) => <CharacterStatusBadge status={character.status} />,
       },
-      {
+      truncatedTextColumn({
         id: "description",
         header: "Description",
-        cell: (character) => (
-          <span className="block max-w-md truncate text-muted-foreground">
-            {character.description ?? "—"}
-          </span>
-        ),
-      },
-      {
-        id: "created_at",
-        header: "Created",
-        sortable: true,
-        cell: (character) => (
-          <span className="text-muted-foreground">{formatDateTime(character.createdAt)}</span>
-        ),
-      },
+        get: (character) => character.description,
+      }),
+      createdAtColumn((character) => character.createdAt),
     ],
 
     meta: [
@@ -135,16 +125,8 @@ export const characterDescriptor: EntityDescriptor<Character, CharacterForm, Cha
         label: "Display name",
         value: (character) => character.displayName,
       },
-      {
-        id: "createdAt",
-        label: "Created",
-        value: (character) => formatDateTime(character.createdAt),
-      },
-      {
-        id: "id",
-        label: "Identifier",
-        value: (character) => <code className="font-mono text-xs">{character.id}</code>,
-      },
+      createdAtMeta((character) => character.createdAt),
+      identifierMeta(),
     ],
 
     sortableFields: CHARACTER_SORT_FIELDS,

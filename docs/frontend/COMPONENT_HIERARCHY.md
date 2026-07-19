@@ -137,6 +137,31 @@ an entity, never a specific one.
 | **EntityFormDialog** | Hosts `EntityForm` for **both** create and edit; mode is derived from whether an entity was passed, so the two cannot diverge (M3) |
 | **useEntityListQuery / useEntityQuery** | Generic list and detail query hooks (key from normalized URL input) |
 | **useEntityMutations** | Generic create/update/delete with detail patch + list invalidation |
+| **EntityListPage / EntityDetailPage** | The complete *screens*: the views above plus create/edit dialog state, delete confirmation, and post-write navigation (M4) |
+| **columns.tsx** | Builders for the column and meta-row shapes every descriptor repeats — `nameColumn`, `truncatedTextColumn`, `createdAtColumn`, `createdAtMeta`, `identifierMeta` (M4) |
+
+> **As-built (M4) — the last per-entity code became generic.** Through Locations each
+> slice hand-wrote its list and detail *pages*: dialog state, delete confirmation,
+> and where to navigate after a write. By the second entity those files were
+> byte-identical apart from the entity's name, so they moved into
+> `EntityCrudPages`. A feature page is now a three-line binding:
+>
+> ```tsx
+> export function FactionListPage() {
+>   return <EntityListPage descriptor={factionDescriptor} />
+> }
+> ```
+>
+> The thin per-slice file is kept deliberately — it is the slice's stable public
+> surface and its route target, and a slice that later needs page-level behaviour
+> the generic screen cannot express can stop delegating without touching anything
+> else.
+>
+> **Column builders are builders, not components.** Each returns a plain
+> `EntityColumnSpec`, so a descriptor can always drop to a hand-written `cell`.
+> Character's alias sub-label and Location's region badge both do exactly that —
+> the escape hatch stays cheap, which is what stops the builders becoming a
+> straitjacket.
 
 > **As-built (M3) — two engine behaviours worth knowing:**
 >

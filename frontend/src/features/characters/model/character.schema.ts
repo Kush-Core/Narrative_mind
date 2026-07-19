@@ -24,6 +24,7 @@ import {
   IsoDateStringSchema,
   LongTextSchema,
 } from "@/shared/schemas/primitives"
+import { emptyToNull, pickDefined } from "@/shared/schemas/wire"
 import type { UnknownRecord } from "@/shared/types/utility"
 
 /* ------------------------------------------------------------------ status */
@@ -133,6 +134,14 @@ export type CharacterListParams = z.infer<typeof CharacterListParamsSchema>
 /* ----------------------------------------------------------------- mappers */
 
 /**
+ * Every field a client may write.
+ *
+ * The list is what keeps the computed, server-owned `display_name` out of a
+ * write body structurally rather than by remembering to omit it (gotcha #5).
+ */
+const WRITABLE_FIELDS = ["name", "aliases", "status", "description"] as const
+
+/**
  * Form → create body.
  *
  * `display_name` is never sent (it is computed server-side), and an empty
@@ -158,12 +167,7 @@ export function toCharacterCreateBody(form: CharacterForm): UnknownRecord {
  * empty string, which the backend does store.
  */
 export function toCharacterUpdateBody(patch: Partial<CharacterForm>): UnknownRecord {
-  const body: UnknownRecord = {}
-  if (patch.name !== undefined) body.name = patch.name
-  if (patch.aliases !== undefined) body.aliases = patch.aliases
-  if (patch.status !== undefined) body.status = patch.status
-  if (patch.description !== undefined) body.description = patch.description
-  return body
+  return pickDefined(patch, WRITABLE_FIELDS)
 }
 
 /** Read model → form values, for the edit flow. */
@@ -174,8 +178,4 @@ export function toCharacterForm(character: Character): CharacterForm {
     status: character.status,
     description: character.description ?? "",
   }
-}
-
-function emptyToNull(value: string): string | null {
-  return value.trim() === "" ? null : value
 }
