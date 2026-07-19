@@ -73,6 +73,38 @@ export function invalidateGraph(queryClient: QueryClient): Promise<void> {
 }
 
 /**
+ * After creating a relationship.
+ *
+ * Two things go stale, and they are stale for different reasons:
+ *
+ *  - **Every graph read.** A new edge changes ego networks and shortest paths
+ *    the client has no way to recompute, and the graph is where the write
+ *    becomes visible. This is the one that matters.
+ *  - **The two endpoints' detail entries.** Neither entity's own *fields*
+ *    changed, so this buys nothing today. It is included because the alternative
+ *    — remembering to add it when detail screens start reading relationships —
+ *    is exactly the kind of coupling that gets forgotten, and a refetch of two
+ *    cached records is not a cost worth optimising against that risk.
+ *
+ * Lists are deliberately **not** invalidated: no list column derives from
+ * relationships, so refetching every page of both collections would be pure
+ * waste.
+ */
+export async function invalidateAfterRelationship(
+  queryClient: QueryClient,
+  endpoints: readonly { collection: EntityCollection; id: string }[],
+): Promise<void> {
+  await Promise.all([
+    invalidateGraph(queryClient),
+    ...endpoints.map((endpoint) =>
+      queryClient.invalidateQueries({
+        queryKey: entityKeys(endpoint.collection).detail(endpoint.id),
+      }),
+    ),
+  ])
+}
+
+/**
  * Drop everything. Reserved for an identity change, so no cached data leaks
  * across users when authentication arrives (architecture §7.1).
  */

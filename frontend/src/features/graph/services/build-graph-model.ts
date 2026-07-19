@@ -2,37 +2,33 @@
  * Backend response → `GraphModel`. Pure, synchronous, no React, no Cytoscape.
  *
  * ---------------------------------------------------------------------------
- * The constraint this module exists to handle honestly
+ * Two response shapes, one model
  * ---------------------------------------------------------------------------
  *
- * `GET /graph/characters/{id}/network?depth=N` runs:
+ * `GET /graph/characters/{id}/network?depth=N` now projects the **induced
+ * subgraph**: the reachable nodes *and* every relationship whose endpoints both
+ * appear, each with its direction, type, and sentiment. When that edge list is
+ * present it is used verbatim — edges are facts at every depth, and
+ * `edgesAreComplete` is true.
  *
- *     OPTIONAL MATCH (c)-[*1..N]-(n)
- *     RETURN c {.id,.name} AS center,
- *            collect(DISTINCT n {.id,.name,labels:labels(n)}) AS neighbors
+ * The endpoint did not always do this. It previously returned reachable nodes
+ * and nothing about the relationships between them, which forced an inference:
  *
- * It returns the **set of reachable nodes and nothing about the relationships
- * between them** — no edge list, no relationship types, not even which neighbour
- * is adjacent to which.
+ *  - At **depth 1** every returned neighbour is adjacent to the centre by
+ *    definition, so a centre→neighbour edge is a fact and is drawn.
+ *  - At **depth > 1** the response mixes one-, two-, and three-hop nodes
+ *    indistinguishably. Drawing centre→neighbour edges there would assert
+ *    relationships that were never reported — a graph that looks authoritative
+ *    and is wrong — so the nodes are returned unlinked and flagged instead.
  *
- * That has a sharp consequence:
+ * That inference is kept as a fallback rather than deleted, because the schema
+ * can tell the two responses apart (`relationships: null` versus `[]`) and a
+ * client that silently claimed a complete edge set against an older backend
+ * would be lying in exactly the way this module exists to prevent.
  *
- *  - At **depth 1**, every returned neighbour is by definition directly adjacent
- *    to the centre. A centre→neighbour edge is a fact, and we draw it.
- *  - At **depth > 1**, the response mixes nodes one, two, and three hops out with
- *    no way to tell them apart. Drawing centre→neighbour edges would assert
- *    direct relationships that were never reported and may not exist — the graph
- *    would look authoritative and be wrong.
- *
- * A graph view that invents edges is worse than one that admits it cannot see
- * them, so beyond depth 1 the nodes are returned unlinked and flagged. The
- * `edgesAreComplete` bit travels with the model so the renderer and the UI notice
- * stay in agreement rather than each deciding for themselves.
- *
- * **This is a backend gap, not a frontend design choice.** The fix is for the
- * ego-network endpoint to project relationships as well as nodes; when it does,
- * only this file changes — the model, renderer, and components are already
- * shaped for a real edge list.
+ * `edgesAreComplete` travels on the model either way, so the renderer and the
+ * UI notice cannot disagree about whether the absence of an edge means
+ * "not connected" or "not reported".
  */
 
 import type { CharacterNetwork } from "@/features/graph/model/graph.schema"
@@ -46,8 +42,10 @@ import { toNodeKind } from "@/shared/domain/entity-kinds"
  *   whether adjacency can be inferred, and it is not echoed in the payload.
  */
 export function buildEgoNetworkModel(network: CharacterNetwork, depth: number): GraphModel {
-  // Only a depth-1 response carries enough information to state adjacency.
-  const adjacencyIsKnown = depth === 1
+  // A projected edge list is authoritative at any depth. Only when the backend
+  // reports none at all must adjacency be inferred, and then only at depth 1.
+  const edgesAreProjected = network.relationships !== null
+  const edgesAreComplete = edgesAreProjected || depth === 1
 
   const focus: GraphNode = {
     id: network.center.id,
@@ -60,7 +58,6 @@ export function buildEgoNetworkModel(network: CharacterNetwork, depth: number): 
 
   const seen = new Set<string>([focus.id])
   const nodes: GraphNode[] = [focus]
-  const edges: GraphEdge[] = []
 
   for (const neighbor of network.neighbors) {
     // A node can be reachable by several paths; the backend already applies
@@ -73,30 +70,82 @@ export function buildEgoNetworkModel(network: CharacterNetwork, depth: number): 
       id: neighbor.id,
       label: neighbor.name,
       kind: toNodeKind(neighbor.labels),
-      isUnlinked: !adjacencyIsKnown,
+      isUnlinked: !edgesAreComplete,
     })
-
-    if (adjacencyIsKnown) {
-      edges.push({
-        id: edgeId(focus.id, neighbor.id),
-        source: focus.id,
-        target: neighbor.id,
-        // Relationship types are not projected by the graph reads, so an edge
-        // carries none. The field exists for when they are.
-      })
-    }
   }
 
-  return { nodes, edges, focusId: focus.id, edgesAreComplete: adjacencyIsKnown }
+  const edges = edgesAreProjected
+    ? buildProjectedEdges(network.relationships ?? [], seen)
+    : buildInferredEdges(focus.id, nodes, edgesAreComplete)
+
+  return { nodes, edges, focusId: focus.id, edgesAreComplete }
+}
+
+/**
+ * Edges the backend reported.
+ *
+ * Endpoints are checked against the node set even though the backend already
+ * filters them: an edge pointing at a node the renderer was never given is not
+ * a drawable edge, and Cytoscape throws rather than skipping it.
+ */
+function buildProjectedEdges(
+  relationships: NonNullable<CharacterNetwork["relationships"]>,
+  nodeIds: ReadonlySet<string>,
+): GraphEdge[] {
+  const edges: GraphEdge[] = []
+  const seen = new Set<string>()
+
+  for (const relationship of relationships) {
+    if (!nodeIds.has(relationship.source) || !nodeIds.has(relationship.target)) continue
+
+    const id = edgeId(relationship.source, relationship.target, relationship.relType)
+    // Two nodes can be joined by several relationship *types*, so identity
+    // includes the type — without it, MEMBER_OF would silently replace KNOWS.
+    if (seen.has(id)) continue
+    seen.add(id)
+
+    edges.push({
+      id,
+      source: relationship.source,
+      target: relationship.target,
+      relType: relationship.relType,
+      sentiment: relationship.sentiment,
+    })
+  }
+
+  return edges
+}
+
+/**
+ * The legacy inference: at depth 1, every neighbour is adjacent to the centre.
+ *
+ * Reached only against a backend that does not project relationships. It can
+ * state *that* two nodes are connected but never how, so these edges carry no
+ * type.
+ */
+function buildInferredEdges(
+  focusId: string,
+  nodes: readonly GraphNode[],
+  adjacencyIsKnown: boolean,
+): GraphEdge[] {
+  if (!adjacencyIsKnown) return []
+
+  return nodes
+    .filter((node) => node.id !== focusId)
+    .map((node) => ({
+      id: edgeId(focusId, node.id),
+      source: focusId,
+      target: node.id,
+    }))
 }
 
 /**
  * A stable, deterministic edge identity.
  *
- * Derived from its endpoints rather than generated, so re-fetching the same
- * network produces the same edge ids — which is what will let a future
+ * Derived from its endpoints and type rather than generated, so re-fetching the
+ * same network produces the same edge ids — which is what lets a future
  * incremental load merge results instead of duplicating them.
  */
-export function edgeId(source: string, target: string): string {
-  return `${source}->${target}`
+export function edgeId(source: string, target: string, relType?: string): string {
+  return relType ? `${source}-${relType}->${target}` : `${source}->${target}`
 }

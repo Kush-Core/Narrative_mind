@@ -22,6 +22,7 @@ import {
   truncatedTextColumn,
 } from "@/shared/entity-kit/columns"
 import type { EntityDescriptor } from "@/shared/entity-kit/types"
+import { RelationshipsSection } from "@/shared/relationships"
 
 /**
  * Everything specific about Events, in one declaration.
@@ -124,5 +125,11 @@ export const eventDescriptor: EntityDescriptor<Event, EventForm, EventListParams
     title: "No events yet",
     description:
       "Events are what happens in your world — the spine everything else hangs from. Create the first one to begin.",
+  },
+
+  slots: {
+    // Relationships are Character-rooted in the backend, so this event is the
+    // relationship's *target* — the section resolves that from the kind.
+    detail: (event) => <RelationshipsSection kind="Event" id={event.id} name={event.name} />,
   },
 }

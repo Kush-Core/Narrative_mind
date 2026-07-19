@@ -10,11 +10,13 @@
  *
  * Verified against `repositories/graph_repo.py`:
  *
- *   ego_network → { center:    { id, name },
- *                   neighbors: [{ id, name, labels: string[] }] }
+ *   ego_network → { center:        { id, name },
+ *                   neighbors:     [{ id, name, labels: string[] }],
+ *                   relationships: [{ source, target, rel_type, sentiment }] }
  *
- * Note what is **absent**: no relationships. See `services/build-graph-model.ts`
- * for what that costs and how it is handled honestly.
+ * `relationships` is the **induced subgraph** over the reported nodes — every
+ * edge whose endpoints both appear, not merely those on a path outward from the
+ * centre. That is what lets the client draw the graph instead of inferring it.
  */
 
 import { z } from "zod"
@@ -45,10 +47,29 @@ const NetworkNeighborSchema = z.object({
   labels: z.array(z.string()).nullish(),
 })
 
+/**
+ * One projected relationship.
+ *
+ * `sentiment` is only meaningful on `KNOWS` edges (the backend sets it on any
+ * edge it is given, but no other type has a use for it), so it is optional
+ * rather than part of the edge's identity.
+ */
+const NetworkRelationshipSchema = z.object({
+  source: IdSchema,
+  target: IdSchema,
+  rel_type: z.string(),
+  sentiment: z.string().nullish(),
+})
+
 export const CharacterNetworkSchema = z
   .object({
     center: NetworkCenterSchema,
     neighbors: z.array(NetworkNeighborSchema).nullish(),
+    /**
+     * Absent — not merely empty — against a backend that predates edge
+     * projection. The distinction is load-bearing and is preserved below.
+     */
+    relationships: z.array(NetworkRelationshipSchema).nullish(),
   })
   .transform((wire) => ({
     center: { id: wire.center.id, name: wire.center.name },
@@ -57,6 +78,21 @@ export const CharacterNetworkSchema = z
       name: neighbor.name ?? "Untitled",
       labels: neighbor.labels ?? [],
     })),
+    /**
+     * `null` means the backend did not project relationships at all; `[]` means
+     * it did and there are none. Collapsing the two would make an unconnected
+     * character indistinguishable from an endpoint that cannot report edges,
+     * and the model would claim a complete edge set it does not have.
+     */
+    relationships:
+      wire.relationships == null
+        ? null
+        : wire.relationships.map((relationship) => ({
+            source: relationship.source,
+            target: relationship.target,
+            relType: relationship.rel_type,
+            sentiment: relationship.sentiment ?? undefined,
+          })),
   }))
 
 export type CharacterNetwork = z.infer<typeof CharacterNetworkSchema>

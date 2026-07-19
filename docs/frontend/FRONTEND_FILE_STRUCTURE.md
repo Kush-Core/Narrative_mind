@@ -262,9 +262,18 @@ shared/
 │   ├── error-presentation.ts  Routing policy: field / inline / toast / silent
 │   ├── endpoints.ts        Every backend path, as builders (M2)
 │   ├── resource.ts         Generic entity resource factory + diffForUpdate (M2)
+│   ├── entity-lookup.ts    {id,name} search over any collection (M5)
 │   ├── query-keys.ts       Central query-key registry/factory
 │   ├── invalidation.ts     Post-write cache-coherence policy (M2)
 │   └── auth.ts             AuthTokenProvider interface (inert seam — no auth now)
+├── relationships/          Relationship management — cross-cutting, not a slice (M5)
+│   ├── index.ts            Public surface
+│   ├── relationship.schema.ts  Zod: form shape, wire shape, body mapper
+│   ├── relationships.api.ts    POST /characters/{id}/relationships
+│   ├── useRelationshipTypes.ts The backend-driven-types seam
+│   ├── useCreateRelationship.ts  Mutation + invalidation + toast
+│   ├── RelationshipDialog.tsx    The generic dialog
+│   └── RelationshipsSection.tsx  The detail-screen entry point
 ├── schemas/                Cross-cutting Zod primitives
 │   ├── page.schema.ts      Page<T> + client-side hasMore derivation
 │   ├── error.schema.ts     Domain envelope + FastAPI detail shapes
@@ -308,6 +317,28 @@ shared/
 >
 > **`lib/invariant.ts` not built:** listed in the original design, never needed.
 > Per the promotion rule, it is added when a second caller wants it.
+>
+> **`relationships/` (as-built, M5) — why a capability folder sits in `shared/`.**
+> It has a slice's shape inside (schema → api → queries → ui) but is not a slice,
+> because it has no entity: it is one dialog that *all four* entity slices open.
+> Placing it in `features/` would mean each slice importing another slice, and —
+> because the dialog also needs to pick entities — would close a dependency cycle
+> back onto them. `shared/` is where a thing every feature may reach belongs.
+>
+> The cycle is avoided rather than worked around: nothing in `relationships/`
+> imports a feature. Entity *identity* comes from `shared/domain/entity-kinds.ts`,
+> the relationship catalog from `shared/domain/relationships.ts`, and entity
+> *search* from `shared/api/entity-lookup.ts` — a deliberately minimal
+> `{id, name}` read that works for any collection because the four list endpoints
+> are byte-for-byte parallel. That is what let `EntityPicker` finally be promoted
+> to `composite/`: with lookup expressed in `shared/`, the picker needs no
+> descriptor and therefore no feature import.
+>
+> **The promotion rule worked exactly as written.** `EntityPicker` was designed
+> in M-plan, deliberately *not* built when the graph wanted one (it stayed as the
+> feature-local `GraphSourcePicker`), and promoted only when the relationship
+> dialog became the genuine second consumer — at which point the right shape was
+> obvious rather than guessed.
 
 - **Purpose:** the small, stable core every feature leans on.
 - **Why `ui/` vs `ui/composite/` split:** `ui/` holds *unopinionated* shadcn

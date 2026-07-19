@@ -29,6 +29,12 @@ export const paths = {
 
   graph: {
     explorer: () => "/graph",
+    /**
+     * The explorer centred on one character. The graph reads its source from
+     * `?character=`, so deep-linking a network is a query param rather than a
+     * route — see the graph workspace's state table in STATE_MANAGEMENT.md.
+     */
+    forCharacter: (characterId: string) => `/graph?character=${encodeURIComponent(characterId)}`,
     shortestPath: () => "/graph/shortest-path",
   },
 } as const

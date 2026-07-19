@@ -113,7 +113,7 @@ primitives. These are *ours*.
 | Composite | Responsibility | Built from | Notes |
 |---|---|---|---|
 | **DataTable** | Headless-table engine + shadcn `Table` markup: column defs, sortable headers, row selection, empty/loading slots | TanStack Table + `Table`, `Skeleton` | One table engine for all four entities (DRY); columns come from the descriptor |
-| **EntityPicker** | Search-select over *any* entity's list API (debounced `name_contains`, paginated) | `Command`/`Popover` + a list query | Used by the relationship editor to choose a target |
+| **EntityPicker** | Search-select over *any* entity kind (debounced `name_contains`) | `Command`/`Popover` + `shared/api/entity-lookup` | **Built M5.** Takes an `EntityKind`, not a descriptor — so it imports no feature slice and both the graph and the relationship dialog can use it. Resolves a preselected id to its name via `lookupEntity` |
 | **ConfirmDialog** | Generic destructive-action confirmation | `AlertDialog`, `Button` | Delete flows |
 | **EmptyState / ErrorState / LoadingState** | The three non-happy-path surfaces, layout-preserving | `Skeleton`, icons, `Button` | Used uniformly by every list/detail |
 | **FormField** | Label + control + validation-message wiring for RHF | `Label`, `Input`, … | The atom the generic form composes |
@@ -256,7 +256,7 @@ plugs into the generic slots.
 
 | Component | Feature | Responsibility |
 |---|---|---|
-| **CharacterRelationshipEditor** | characters | List/create relationships for a character: pick `rel_type` (the 4 allowed values), choose a target via `EntityPicker`, add `sentiment` **only** when `KNOWS`; guides valid target types per rel while tolerating the backend's permissiveness |
+| ~~**CharacterRelationshipEditor**~~ | ~~characters~~ | **Superseded in M5 — see §6d.** Built instead as a *generic* `RelationshipDialog` in `shared/relationships/`, because all four entity types host the affordance, not only Character |
 | **CharacterStatusBadge** | characters | Renders `alive/dead/unknown` with a semantic token |
 | **AliasList** | characters | Displays/edits the deduped alias set (≤10) |
 | **RegionBadge** | locations | Renders a region, or a quiet "Unassigned" — a region-less place is an unfinished state, not missing data |
@@ -310,6 +310,52 @@ re-rendering through the VDOM.
 one new shared module, `shared/domain/entity-kinds.ts` — see §6c. The graph
 rejoins the app through a *route*, not an abstraction: the inspector links to an
 entity's detail screen.
+
+### 6d. Relationship management (as-built, M5)
+
+A cross-cutting capability, not a layer and not a slice. It lives in
+`shared/relationships/` and is opened from all four entity detail screens.
+
+```
+shared/domain/relationships.ts     the catalog: 4 types, target guidance,
+                                   sentiment rule, and the anchor-role rule
+shared/api/entity-lookup.ts        {id,name} search over any collection
+shared/ui/composite/EntityPicker   search-select, generic over EntityKind
+shared/relationships/
+  RelationshipDialog.tsx           the generic dialog (source · type · target
+                                   · review · create)
+  RelationshipsSection.tsx         the detail-slot entry point
+  useCreateRelationship.ts         mutation + invalidation + toast
+  useRelationshipTypes.ts          seam for future backend-driven types
+```
+
+**Why the dialog is not a Character component.** The original plan put a
+`CharacterRelationshipEditor` in the Character detail slot. That was right when
+only Characters hosted the affordance. The requirement is now all four screens,
+and four near-identical editors is precisely the duplication `entity-kit`
+exists to refuse — so the dialog is generic and each descriptor mounts the same
+`RelationshipsSection` through its existing `detail` slot. The escape-hatch
+pattern is unchanged; only the thing being injected became shared.
+
+**The one asymmetry it must encode.** The backend roots relationship writes at a
+Character (`MATCH (source:Character {id: $source_id})`), so the entity a dialog
+is opened from can only be the *source* on a Character screen; elsewhere it is
+the **target** and the writer picks the character. The dialog takes a
+`RelationshipAnchor` carrying that role. Because each relationship type points at
+a distinct entity kind, a pinned target also fixes the type — from a Faction page
+`MEMBER_OF` is the only expressible statement, so the control is settled rather
+than offered.
+
+**Review without a wizard.** The specified workflow has a review step; it is
+rendered as a continuously-updating sentence (`Mira Solenne is a member of The
+Tidebinders`) rather than a second dialog page. A relationship is one sentence,
+and a writer watching it form does not need a confirmation screen to check it.
+
+**No relationship list, deliberately.** No endpoint returns an entity's
+relationships; the nearest is the Character-rooted ego network. Building a list
+for Characters alone would leave three screens visibly missing a section, reading
+as a bug rather than as the backend asymmetry it is. Creation lives here, reading
+lives in the graph, and the write invalidates the graph cache.
 
 ### 6c. `shared/domain/entity-kinds.ts`
 
@@ -380,11 +426,20 @@ CharacterDetailPage                       (container)
   useEntityQuery(id)
   <EntityDetailView descriptor entity>    (generic)
     fields from descriptor
-    slot: <CharacterRelationshipEditor>   (feature-specific, layer 4)
-      <EntityPicker> → target             (composite)
-      rel_type Select (4 values), sentiment only if KNOWS
-      useEntityMutations / linkRelationship
+    slot: <AliasList>                     (feature-specific, layer 4)
+    slot: <RelationshipsSection>          (shared capability — M5)
+      <RelationshipDialog anchor>         (generic, shared/relationships)
+        pinned source (this character)
+        rel_type Select (4 values) → decides the target's kind
+        <EntityPicker kind={targetKind}>  (composite)
+        sentiment only if KNOWS
+        useCreateRelationship → invalidateAfterRelationship
 ```
+
+The same slot on a Faction, Location, or Event screen mounts the *same*
+`RelationshipsSection`; only the anchor's role differs, and the section resolves
+that from the entity kind. Specificity still enters through the descriptor — it
+is just that this particular injected component turned out to be shared.
 
 At no point does a primitive know about characters, nor does the generic engine
 contain a character-specific branch — specificity enters only through the

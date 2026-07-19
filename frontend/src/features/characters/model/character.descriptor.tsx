@@ -24,6 +24,7 @@ import {
   truncatedTextColumn,
 } from "@/shared/entity-kit/columns"
 import type { EntityDescriptor } from "@/shared/entity-kit/types"
+import { RelationshipsSection } from "@/shared/relationships"
 
 /**
  * Everything specific about Characters, in one declaration.
@@ -151,8 +152,14 @@ export const characterDescriptor: EntityDescriptor<Character, CharacterForm, Cha
 
     slots: {
       // Aliases deserve richer presentation than the generic comma-joined
-      // fallback. The relationship editor joins this slot in M5.
-      detail: (character) =>
-        character.aliases.length > 0 ? <AliasList aliases={character.aliases} /> : null,
+      // fallback; relationships are the other thing a character *is* beyond its
+      // own fields. Both enter through the slot, so `EntityDetailView` still
+      // contains no per-entity branch.
+      detail: (character) => (
+        <>
+          {character.aliases.length > 0 ? <AliasList aliases={character.aliases} /> : null}
+          <RelationshipsSection kind="Character" id={character.id} name={character.name} />
+        </>
+      ),
     },
   }

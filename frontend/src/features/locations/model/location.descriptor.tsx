@@ -22,6 +22,7 @@ import {
   truncatedTextColumn,
 } from "@/shared/entity-kit/columns"
 import type { EntityDescriptor } from "@/shared/entity-kit/types"
+import { RelationshipsSection } from "@/shared/relationships"
 
 /**
  * Everything specific about Locations, in one declaration.
@@ -121,5 +122,13 @@ export const locationDescriptor: EntityDescriptor<Location, LocationForm, Locati
   emptyState: {
     title: "No locations yet",
     description: "Locations are the places of your world. Create the first one to begin.",
+  },
+
+  slots: {
+    // Relationships are Character-rooted in the backend, so this location is the
+    // relationship's *target* — the section resolves that from the kind.
+    detail: (location) => (
+      <RelationshipsSection kind="Location" id={location.id} name={location.name} />
+    ),
   },
 }

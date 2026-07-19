@@ -51,13 +51,20 @@ export function GraphInspector({ selection, model }: GraphInspectorProps) {
           <Fact
             label="Type"
             value={
-              edge.relType ?? (
+              edge.relType ? (
+                <Badge variant="secondary" className="font-mono text-2xs">
+                  {edge.relType}
+                </Badge>
+              ) : (
                 // Honest about a backend limitation rather than showing a dash
                 // that reads as "no relationship type exists".
                 <span className="text-muted-foreground">Not reported by the graph API</span>
               )
             }
           />
+          {/* Sentiment is only carried by KNOWS edges, so an absent one is not
+              a gap worth a row. */}
+          {edge.sentiment ? <Fact label="Sentiment" value={edge.sentiment} /> : null}
         </dl>
       </div>
     )

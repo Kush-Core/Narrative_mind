@@ -15,18 +15,55 @@ class GraphRepository:
     async def _ego_tx(
         tx: AsyncManagedTransaction, character_id: str, depth: int
     ) -> dict[str, Any] | None:
+        """Return the reachable nodes *and* the relationships among them.
+
+        The relationship pass is deliberately a second step over the resolved
+        node set rather than a projection of the traversal's paths. Collecting
+        `relationships(path)` would only report edges that happen to lie on a
+        path outward from the centre, which omits edges *between* neighbours —
+        at depth 1 it would return no neighbour-to-neighbour edge at all.
+
+        Matching every edge whose endpoints are both in scope returns the
+        **induced subgraph**, so the edge set is complete for the nodes reported
+        and a client can draw it without inferring adjacency. That is what lets
+        the frontend stop guessing at depth > 1.
+        """
         query = f"""
         MATCH (c:Character {{id: $id}})
         OPTIONAL MATCH (c)-[*1..{depth}]-(n)
+        WITH c, collect(DISTINCT n) AS neighbors
+        WITH c, neighbors, neighbors + [c] AS scope
+        UNWIND scope AS source
+        OPTIONAL MATCH (source)-[r]->(target)
+        WHERE target IN scope
+        WITH c, neighbors, collect(DISTINCT r) AS rels
         RETURN c {{.id, .name}} AS center,
-               collect(DISTINCT n {{.id, .name, labels: labels(n)}}) AS neighbors
+               [x IN neighbors | x {{.id, .name, labels: labels(x)}}] AS neighbors,
+               [r IN rels | {{
+                   source: startNode(r).id,
+                   target: endNode(r).id,
+                   rel_type: type(r),
+                   sentiment: r.sentiment
+               }}] AS relationships
         """
         result = await tx.run(query, id=character_id)  # type: ignore
         record = await result.single()
         if record is None or record["center"] is None:
             return None
         neighbors = [n for n in record["neighbors"] if n.get("id") is not None]
-        return {"center": record["center"], "neighbors": neighbors}
+        # An edge whose endpoints did not both resolve cannot be drawn, and a
+        # half-anchored edge is worse than a missing one.
+        known_ids = {n["id"] for n in neighbors} | {record["center"]["id"]}
+        relationships = [
+            r
+            for r in record["relationships"]
+            if r["source"] in known_ids and r["target"] in known_ids
+        ]
+        return {
+            "center": record["center"],
+            "neighbors": neighbors,
+            "relationships": relationships,
+        }
 
     async def shortest_path(self, source: str, target: str) -> dict[str, Any] | None:
         return await self._session.execute_read(self._sp_tx, source, target)

@@ -364,6 +364,81 @@ is independently reviewable and leaves the app in a working state.
 
 ---
 
+> **M5 as-built notes — Relationship management (2026-07-19).** Built *after*
+> M6, which changed what it should be.
+>
+> **The backend fact that shaped the feature.** Relationship writes are rooted at
+> a Character by the Cypher itself — `MATCH (source:Character {id: $source_id})`
+> — so a Faction or Event id as source matches nothing and 404s. The requirement
+> was an entry point on all four detail screens with the source prefilled, but on
+> three of them "the entity you opened from" *cannot* be the source. So the
+> pinned entity carries a **role**: source from a Character, target from
+> everything else. One end is always prefilled; which end follows the data model
+> rather than the screen. `relationshipRoleFor()` states this once, next to the
+> backend fact that forces it.
+>
+> A consequence worth noting: because each relationship type points at a distinct
+> entity kind, a pinned *target* admits exactly one type. From a Faction page the
+> type control is settled, not offered — there is nothing to choose.
+>
+> **Not `CharacterRelationshipEditor`.** M5 was specified as a Character-specific
+> component in the Character detail slot. That was right when only Characters
+> could host the affordance; it is wrong now that all four screens do. The
+> component is generic (`shared/relationships/`), imports no feature slice, and
+> the four descriptors reach it through their existing `detail` slot — so
+> `entity-kit/` still contains no per-entity branch, and a fifth entity type
+> would need no change here.
+>
+> **The dependency cycle, and how it was avoided.** The dialog is consumed by all
+> four entity slices, so it cannot import them — `characters → dialog → picker →
+> characters` would close a loop. A picker needs far less than a descriptor
+> carries, though: an id, a name, and a search, which is identical across four
+> byte-for-byte parallel list endpoints. `shared/api/entity-lookup.ts` expresses
+> exactly that with no feature import, and the cycle never forms. The cost is a
+> second, smaller Zod schema for data the entity schemas already validate — a few
+> lines against a structural cycle.
+>
+> **`EntityPicker` was promoted, as predicted.** `GraphSourcePicker` carried a
+> note saying it would stay feature-local "until the relationship editor lands
+> and shows what a general `EntityPicker` really needs". It landed, the two
+> wanted the same component, and `GraphSourcePicker` is now a nine-line binding
+> that no longer reaches into the characters slice at all.
+>
+> **Relationships are created here and read in the graph.** No endpoint returns
+> an entity's relationships; the nearest thing is the Character-rooted ego
+> network. A per-entity list could therefore be built for Characters and for no
+> one else, and three screens showing a section the fourth lacks would read as a
+> bug rather than as the backend asymmetry it is. So the section owns creation,
+> the graph owns reading, and the write invalidates the graph cache so the new
+> edge is there on arrival. **This is the top remaining backend gap for this
+> feature:** a node-rooted network endpoint would make per-entity relationship
+> lists worth building.
+>
+> **A bug only the browser could catch.** The pickers were wired
+> `aria-labelledby={describedBy}` — pointing a control's *name* at its
+> description. The accessible name of the target picker became "Choose a
+> relationship type first." Typecheck, lint, and the unit suite all passed; a
+> Playwright strict-mode violation on an ambiguous role query is what surfaced
+> it. Now `id` (which `FormField`'s `<Label htmlFor>` targets) names the control
+> and `aria-describedby` describes it.
+>
+> **Verified in a real browser** (Chrome via Playwright, backend + Neo4j live):
+> all four detail screens offer the section and open the dialog with the right
+> end pinned and the type control settled or open as appropriate; a relationship
+> created from a Character page and one created from a Location page both reach
+> the database with the roles correct; submit stays disabled until both ends are
+> chosen; the review line reads as a sentence; the graph shows the new edge
+> without a reload; **zero console errors**. 30 new tests (310 total), plus 4 new
+> backend tests (31 total).
+>
+> **Not built, by instruction:** relationship editing, deletion, drag-to-connect,
+> inline edge manipulation, and any graph-side creation entry point. The dialog
+> *supports* an unanchored two-picker mode — that is the "choose a source entity"
+> step of the specified workflow — but nothing wires it up; it is what a future
+> graph entry point would use.
+
+---
+
 ## M6 — Graph explorer (isolated, lazy, pluggable renderer)
 
 - **Objective:** Visualize and traverse the world graph without taxing the rest of
@@ -419,6 +494,27 @@ is independently reviewable and leaves the app in a working state.
 > **This is the top backend enhancement candidate.** If the endpoint projected
 > relationships, only `services/build-graph-model.ts` would change; the model,
 > renderer, and components are already shaped for a real edge list.
+>
+> > **Resolved (M5, 2026-07-19) — and the prediction held.** The endpoint now
+> > projects the induced subgraph. The client changes were
+> > `services/build-graph-model.ts` (use the edge list; keep the depth-1
+> > inference as a fallback for a backend that reports none), the Zod schema, and
+> > two lines of the model type. The renderer, the canvas, the interaction state,
+> > and the workspace were untouched — which is what the engine boundary was for.
+> >
+> > Two follow-on changes the real data forced. Edge **identity** now includes
+> > the relationship type: two nodes can be joined by several types, and
+> > `source->target` alone would have silently collapsed `MEMBER_OF` into
+> > `KNOWS`. And edge **labels** were tried always-on and reverted to
+> > selection-only — Cytoscape does no label-collision avoidance, so a 19-edge
+> > ego network rendered a thicket of overlapping `PARTICIPATED_IN` strings
+> > across the nodes they described. They were also largely redundant: each
+> > relationship type points at a distinct entity kind, so the target node's
+> > colour already tells a reader which type an edge is.
+> >
+> > Measured on the seeded world, centred on one character: depth 1 went from 8
+> > inferred untyped edges to 19 typed ones; depth 2 from **zero** edges and a
+> > "we cannot tell you" notice to 51 typed edges. The notice is gone.
 >
 > **A rendering bug only the browser could catch.** Design tokens are authored in
 > `oklch()`. Cytoscape's colour parser handles hex/rgb/hsl/named only, so every

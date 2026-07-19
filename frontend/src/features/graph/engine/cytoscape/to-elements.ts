@@ -36,7 +36,10 @@ export function toElements(model: GraphModel): ElementDefinition[] {
       id: edge.id,
       source: edge.source,
       target: edge.target,
+      // Omitted when absent, so the `edge[relType]` selector distinguishes a
+      // reported edge from an inferred one.
       ...(edge.relType ? { relType: edge.relType } : {}),
+      ...(edge.sentiment ? { sentiment: edge.sentiment } : {}),
     },
   }))
 

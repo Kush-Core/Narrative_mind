@@ -167,11 +167,31 @@ function buildRules(token: (name: string, fallback: string) => string): Styleshe
       style: {
         width: 1.5,
         "line-color": border,
-        "curve-style": "straight",
+        // `bezier` rather than `straight`: two nodes can be joined by several
+        // relationship types, and straight lines would draw them on top of one
+        // another so only the last would be visible.
+        "curve-style": "bezier",
         "target-arrow-shape": "none",
         opacity: 0.9,
         "transition-property": "line-color, width, opacity",
         "transition-duration": 120,
+      },
+    },
+
+    /**
+     * A typed edge — one the backend actually reported, rather than one inferred
+     * from depth-1 reachability.
+     *
+     * It gets an arrowhead, because direction is a real fact here, whereas an
+     * inferred edge knows only *that* two nodes are connected. Styling the two
+     * identically would present a guess as a citation.
+     */
+    {
+      selector: "edge[relType]",
+      style: {
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": border,
+        "arrow-scale": 0.85,
       },
     },
 
@@ -185,12 +205,37 @@ function buildRules(token: (name: string, fallback: string) => string): Styleshe
         "z-index": 20,
       },
     },
+    /**
+     * The relationship type is revealed on selection, not painted on every edge.
+     *
+     * Always-on labels were tried and are wrong here for two reasons. Cytoscape
+     * does no label-collision avoidance, so a modest ego network (19 edges)
+     * renders a thicket of overlapping `PARTICIPATED_IN` strings across the
+     * nodes they describe. And they are largely redundant: each relationship
+     * type points at a distinct entity kind, so the *target node's colour*
+     * already tells a reader which type an edge is — the legend does the work
+     * the labels were duplicating.
+     *
+     * What remains is confirmation on demand, alongside the inspector's full
+     * account of the selected edge.
+     */
     {
       selector: "edge:selected",
       style: {
         width: 3,
         "line-color": ring,
+        "target-arrow-color": ring,
         opacity: 1,
+        label: "data(relType)",
+        color: foreground,
+        "font-size": 10,
+        "font-family": "inherit",
+        "text-rotation": "autorotate",
+        "text-background-color": surface,
+        "text-background-opacity": 0.9,
+        "text-background-padding": "3px",
+        "text-background-shape": "roundrectangle",
+        "z-index": 30,
       },
     },
   ]

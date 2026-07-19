@@ -21,6 +21,7 @@ import {
   truncatedTextColumn,
 } from "@/shared/entity-kit/columns"
 import type { EntityDescriptor } from "@/shared/entity-kit/types"
+import { RelationshipsSection } from "@/shared/relationships"
 
 /**
  * Everything specific about Factions, in one declaration.
@@ -119,5 +120,13 @@ export const factionDescriptor: EntityDescriptor<Faction, FactionForm, FactionLi
   emptyState: {
     title: "No factions yet",
     description: "Factions are the powers of your world. Create the first one to begin.",
+  },
+
+  slots: {
+    // Relationships are Character-rooted in the backend, so this faction is the
+    // relationship's *target* — the section resolves that from the kind.
+    detail: (faction) => (
+      <RelationshipsSection kind="Faction" id={faction.id} name={faction.name} />
+    ),
   },
 }

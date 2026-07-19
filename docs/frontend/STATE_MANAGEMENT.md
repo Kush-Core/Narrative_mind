@@ -75,6 +75,23 @@ Mutations invalidate at the coarsest safe level: create/delete →
 invalidate the entity root. Normalized input (sorted keys, defaults applied) makes
 identical logical queries share one cache entry.
 
+> **As-built (M5) — a relationship write invalidates on a different axis.**
+> Creating a relationship changes no entity's own fields, so the usual
+> list-invalidation would be pure waste: no list column derives from
+> relationships. What it does change is every *derived* read — ego networks and
+> shortest paths the client cannot recompute. So
+> `invalidateAfterRelationship(queryClient, endpoints)` invalidates
+> `['graph']` plus the two endpoints' `detail` keys, and no list.
+>
+> The two detail keys buy nothing today, and are included anyway: the moment a
+> detail screen starts reading relationships, the alternative is remembering to
+> add them, which is the kind of coupling that gets forgotten. Two cached records
+> is not a cost worth optimising against that risk.
+>
+> The write is **not optimistic**. Its visible effect is a server-computed graph,
+> so there is nothing correct to predict — the same class of reason that keeps
+> entity create and delete non-optimistic.
+
 ### Alternatives considered and rejected
 
 - **RTK Query (Redux Toolkit):** capable server-cache, but drags in the full Redux

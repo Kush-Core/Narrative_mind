@@ -199,11 +199,26 @@ Each is a fact from the analysis, with the required handling:
    are declared `-> dict`, so FastAPI generates no response model and there is no
    OpenAPI shape to lean on — Zod validation at this boundary is the only thing
    between a changed Cypher projection and a crash inside the renderer.
-   **The ego-network response contains no relationships at all** — only reachable
-   nodes. Adjacency is therefore inferable at depth 1 and *not* at depth > 1; the
-   client draws edges only where they are facts (IMPLEMENTATION_PLAN.md M6). This
-   is the top backend enhancement candidate: projecting relationships alongside
-   nodes would change one client file.
+
+   > **Resolved (M5).** This entry previously read: *"the ego-network response
+   > contains no relationships at all — only reachable nodes,"* which forced the
+   > client to infer adjacency at depth 1 and draw nothing beyond it. The
+   > endpoint now projects the **induced subgraph** — every relationship whose
+   > endpoints both appear in the node set, with `source`, `target`, `rel_type`,
+   > and `sentiment`. Edges are facts at every depth, and `edgesAreComplete` is
+   > true whenever the field is present.
+   >
+   > The projection is a second pass over the resolved node set, not a projection
+   > of the traversal's paths. Collecting `relationships(path)` would report only
+   > edges lying on a path outward from the centre, which omits edges *between*
+   > neighbours — at depth 1 it would return no neighbour-to-neighbour edge at
+   > all, drawing a star where the data holds a triangle.
+   >
+   > The client still distinguishes `relationships: null` (the field is absent —
+   > an older backend) from `[]` (projected, and there are none), and keeps the
+   > depth-1 inference as the fallback for the former. Claiming a complete edge
+   > set against a backend that cannot report one would be the exact dishonesty
+   > the original constraint was handled to avoid.
 
 9. **Relationships are Character-rooted** (`POST /characters/{id}/relationships`),
    `rel_type ∈ {KNOWS, MEMBER_OF, LOCATED_IN, PARTICIPATED_IN}`, `sentiment`
@@ -211,6 +226,27 @@ Each is a fact from the analysis, with the required handling:
    (§Observations #8). The UI guides valid pairings (MEMBER_OF→Faction,
    LOCATED_IN→Location, PARTICIPATED_IN→Event, KNOWS→Character) while staying
    tolerant of what the backend allows.
+
+   > **As-built (M5).** "Character-rooted" is enforced by the Cypher
+   > (`MATCH (source:Character {id: $source_id})`), not merely conventional — a
+   > Faction id as source matches nothing and the write 404s. That single fact
+   > shapes the whole feature's UX: the entity a relationship dialog is opened
+   > from cannot always be the source, so it carries a **role**. From a Character
+   > it pins the source; from a Location, Faction, or Event it pins the *target*
+   > and the writer picks the character. Both cases prefill exactly one end.
+   >
+   > Target-type guidance is expressed by making the chosen `rel_type` decide
+   > which collection the target picker searches. Because each type points at a
+   > distinct entity kind, that also means a pinned target of a given kind admits
+   > exactly one type — from a Faction page the only expressible statement is
+   > `MEMBER_OF`, so the type control is settled rather than offered.
+   >
+   > There is **no endpoint that lists an entity's relationships**, and no
+   > endpoint that enumerates the valid `rel_type` values (they live in
+   > `_ALLOWED_REL_TYPES`, a Python constant). The catalog is therefore
+   > client-side, behind a `useRelationshipTypes()` seam so a future
+   > backend-driven list changes one file rather than every component that
+   > renders a type.
 
 ---
 

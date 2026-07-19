@@ -34,15 +34,19 @@ export interface GraphNode {
 /**
  * One edge in the rendered graph.
  *
- * `relType` is optional because the current backend does not return relationship
- * types in graph reads — the field exists so that when it does, the renderer and
- * inspector light up without a model change.
+ * `relType` stays optional because it is only known when the backend projects
+ * relationships. Against an endpoint that reports reachable nodes alone, an
+ * edge can be inferred at depth 1 but its type cannot — so a typeless edge
+ * means "connected, kind unknown", not "untyped relationship".
+ *
+ * `sentiment` is carried only by `KNOWS` edges.
  */
 export interface GraphEdge {
   id: string
   source: string
   target: string
   relType?: string
+  sentiment?: string
 }
 
 /**
