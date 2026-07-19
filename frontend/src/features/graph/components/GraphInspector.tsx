@@ -28,7 +28,7 @@ interface GraphInspectorProps {
 export function GraphInspector({ selection, model }: GraphInspectorProps) {
   if (!selection) {
     return (
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-col gap-3 p-5">
         <SectionLabel>Selection</SectionLabel>
         <p className="text-xs text-muted-foreground">
           Select a node or an edge to inspect it. Double-click a node to open it.
@@ -43,7 +43,7 @@ export function GraphInspector({ selection, model }: GraphInspectorProps) {
     const target = model.nodes.find((node) => node.id === edge.target)
 
     return (
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-col gap-3 p-5">
         <SectionLabel>Relationship</SectionLabel>
         <dl className="flex flex-col gap-3 text-sm">
           <Fact label="From" value={source?.label ?? edge.source} />
@@ -68,7 +68,7 @@ export function GraphInspector({ selection, model }: GraphInspectorProps) {
   const detailPath = identity.detailPath?.(node.id)
 
   return (
-    <div className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-3 p-5">
       <SectionLabel>Selection</SectionLabel>
 
       <div className="flex flex-col gap-2">

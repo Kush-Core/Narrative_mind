@@ -42,14 +42,18 @@ export function PageHeader({
         />
       ) : null}
 
-      <div className="flex min-w-0 items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
+      {/* Wraps rather than clipping. With a non-wrapping row the actions — the
+          screen's primary control — were pushed outside the viewport below about
+          1024px and became unreachable. `ml-auto` keeps them right-aligned
+          whether they sit beside the title or on their own line. */}
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
           <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">{title}</h1>
           {description ? (
             <p className="max-w-prose text-xs text-muted-foreground">{description}</p>
           ) : null}
         </div>
-        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="ml-auto flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
 
       {children}

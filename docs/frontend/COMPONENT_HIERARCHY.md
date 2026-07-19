@@ -55,6 +55,32 @@ Before components: the tokens they consume.
   block behind a `data-theme` attribute — the `theme-provider.tsx` seam exists for
   this, unused today.
 
+### 2b. Layout rhythm (as-built, M7 consistency audit)
+
+Three rules the audit turned from accident into decision. They were not written
+down before, and every drift found was a place one of them had been broken.
+
+**Surface inset — 20px (`px-5`).** One horizontal inset for everything in the
+main content column: `PageHeader`, the detail body, `PaginationControls`,
+`LoadingState`, and a table's **first and last cells**. Before, these were 20 /
+16 / 12px respectively, so the page title, the first table column, and the
+pagination summary each started at a different x. Table *rows* stay full-bleed —
+only the edge cells carry the inset — so hover and selection still span the full
+width while the text lines up.
+
+**Control rhythm — 32px (`h-8`).** Every interactive control in a toolbar, header,
+or form row is 32px tall. `SelectTrigger size="sm"` was 28px, which put a 4px
+step next to the search input, the pagination arrows, and the graph's viewport
+buttons — the same defect in three places, fixed once in the primitive.
+
+**Row rhythm — uniform per table.** `TableCell` carries `h-9` as a *minimum*, and
+a column that declares a secondary line reserves it on every row. Row height
+tracking content made the Characters table alternate 35px and 50px rows.
+
+> **Also settled here:** the header's `actions` slot is for *actions*. The graph
+> workspace had put its colour legend there, where every other screen puts its
+> primary button; it moved to the toolbar.
+
 Motion principle (restated at component level): transitions **communicate state**
 (panel open, route change, list reflow, optimistic settle, focus movement) and are
 driven by motion tokens. No decorative/ambient animation.

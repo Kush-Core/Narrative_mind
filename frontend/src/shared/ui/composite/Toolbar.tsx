@@ -17,7 +17,10 @@ export function Toolbar({ className, ...props }: ComponentProps<"div">) {
     <div
       role="toolbar"
       data-slot="toolbar"
-      className={cn("flex h-8 items-center gap-1.5 text-sm", className)}
+      // `min-h-8` rather than `h-8`: a fixed height cannot wrap, so at narrow
+      // widths the trailing controls were pushed out of the viewport instead of
+      // moving to a second line.
+      className={cn("flex min-h-8 flex-wrap items-center gap-x-1.5 gap-y-2 text-sm", className)}
       {...props}
     />
   )

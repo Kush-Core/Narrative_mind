@@ -46,7 +46,7 @@ export function PaginationControls({
     <nav
       aria-label="Pagination"
       className={cn(
-        "flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-4 py-2",
+        "flex shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-2",
         className,
       )}
     >

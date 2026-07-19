@@ -49,7 +49,14 @@ export function nameColumn<TRead>(options: {
       return (
         <div className="flex flex-col">
           <span className="font-medium text-foreground">{get(entity)}</span>
-          {below ? <span className="text-2xs text-muted-foreground">{below}</span> : null}
+          {/* When a column declares a secondary line, the space is reserved on
+              every row even where the value is absent. Rendering it
+              conditionally made row heights track their content, so a table
+              whose rows happened to have aliases read as ragged — 50px beside
+              35px in the same view. */}
+          {secondary ? (
+            <span className="min-h-4 text-2xs text-muted-foreground">{below}</span>
+          ) : null}
         </div>
       )
     },

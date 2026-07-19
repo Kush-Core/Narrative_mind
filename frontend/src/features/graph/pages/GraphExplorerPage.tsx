@@ -80,12 +80,8 @@ export function GraphExplorerPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Graph explorer"
-        description="Trace how the people of your world connect."
-        actions={<GraphLegend />}
-      >
+    <div className="flex h-full w-full min-w-0 flex-col">
+      <PageHeader title="Graph explorer" description="Trace how the people of your world connect.">
         <Toolbar>
           <ToolbarGroup>
             <GraphSourcePicker
@@ -110,6 +106,12 @@ export function GraphExplorerPage() {
           </ToolbarGroup>
 
           <ToolbarSpacer />
+
+          {/* The legend lives in the toolbar, not in the header's `actions`
+              slot. Every other screen puts its primary action there, and a
+              non-interactive key sitting where users look for "New …" was the
+              one place that pattern broke. */}
+          <GraphLegend className="mr-1" />
 
           <GraphViewportControls
             renderer={renderer}

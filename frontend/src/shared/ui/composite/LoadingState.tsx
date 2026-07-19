@@ -21,7 +21,7 @@ export function LoadingState({ rows = 5, label = "Loading", className }: Loading
       role="status"
       aria-live="polite"
       aria-busy="true"
-      className={cn("flex w-full flex-col gap-2 p-4", className)}
+      className={cn("flex w-full flex-col gap-2 px-5 py-4", className)}
     >
       <span className="sr-only">{label}</span>
       {Array.from({ length: rows }, (_, index) => (

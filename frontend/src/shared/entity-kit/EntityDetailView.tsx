@@ -77,7 +77,7 @@ export function EntityDetailView<
   const subtitle = descriptor.getSubtitle?.(entity)
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full w-full min-w-0 flex-col">
       <PageHeader
         title={descriptor.getTitle(entity)}
         description={subtitle}
@@ -107,7 +107,7 @@ export function EntityDetailView<
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-auto">
         <div className="flex max-w-4xl flex-col gap-6 p-5">
           <section className="flex flex-col gap-4">
             <SectionLabel>Details</SectionLabel>

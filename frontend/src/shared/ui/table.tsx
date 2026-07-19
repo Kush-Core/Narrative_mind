@@ -60,12 +60,21 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   )
 }
 
+/**
+ * Edge cells carry the surface inset (`px-5`) rather than the tighter inter-column
+ * rhythm (`px-3`), so the first column's text lines up with the page title, the
+ * toolbar, and the pagination bar above and below it. The row itself stays
+ * full-bleed, so hover and selection still span the whole width.
+ */
+const EDGE_INSET = "first:pl-5 last:pr-5"
+
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
       className={cn(
         "h-8 px-3 text-left align-middle text-2xs font-medium tracking-wider whitespace-nowrap text-muted-foreground uppercase has-[[role=checkbox]]:pr-0 *:[[role=checkbox]]:translate-y-0.5",
+        EDGE_INSET,
         className,
       )}
       {...props}
@@ -78,7 +87,12 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "px-3 py-1.5 align-middle whitespace-nowrap has-[[role=checkbox]]:pr-0 *:[[role=checkbox]]:translate-y-0.5",
+        // `h-9` on a cell acts as a *minimum* row height, so every row shares one
+        // rhythm regardless of whether its content happens to include a badge or
+        // a second line. Without it, row heights track their content and a table
+        // reads as ragged.
+        "h-9 px-3 py-1.5 align-middle whitespace-nowrap has-[[role=checkbox]]:pr-0 *:[[role=checkbox]]:translate-y-0.5",
+        EDGE_INSET,
         className,
       )}
       {...props}

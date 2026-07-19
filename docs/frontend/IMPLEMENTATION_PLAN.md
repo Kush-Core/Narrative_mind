@@ -456,6 +456,39 @@ is independently reviewable and leaves the app in a working state.
 
 ---
 
+> **UI consistency audit (2026-07-19).** A polish pass across all nine screens
+> at 1440 / 1024 / 860 / 720 / 600px, measured from the DOM rather than eyeballed.
+> No redesign; every fix landed in a shared component.
+>
+> **The serious one was a layout bug, not a cosmetic drift.** The workspace's
+> panel row is a grid item, and a grid item defaults to `min-width: auto` — so it
+> sized to the panel group's min-content (~1100px) while the grid clipped the
+> overflow. Below roughly 1100px, **every screen's right-hand controls were
+> silently cut off**: "New character" and the pagination arrows were invisible and
+> unreachable at 1024px, a common laptop width. One `min-w-0` fixed all of it.
+> Nothing catches this but resizing the real app — the pages render fine and
+> throw nothing.
+>
+> **Three rhythms were accidental rather than decided**, and are now written down
+> in COMPONENT_HIERARCHY.md §2b: a 20px surface inset (was 20/16/12 across header,
+> pagination, and table cells, so nothing lined up vertically), a 32px control
+> height (`SelectTrigger size="sm"` was 28px, sitting beside 32px controls in
+> three separate toolbars), and uniform row heights (the Characters table
+> alternated 35px and 50px depending on whether a row happened to have aliases).
+>
+> **Verified, not assumed:** zero horizontal overflow at all five widths (was up
+> to 568px), row heights uniform per table, five reference points on every list
+> screen aligned at the same x, all controls 32px, and every focusable element
+> showing a focus ring under real Tab navigation. Contrast measured 15.9:1 for
+> body text and 6.8:1 for muted — both above AA.
+>
+> One honest note: an initial focus audit using programmatic `.focus()` reported
+> the nav links as having no focus indicator. That was a false positive —
+> `:focus-visible` requires keyboard interaction — and re-testing with real Tab
+> presses showed every element correct. Worth remembering before "fixing" it.
+
+---
+
 ## M7 — World overview & global search
 
 - **Objective:** A meaningful landing surface and cross-entity discovery.

@@ -94,7 +94,10 @@ export function EntityListView<
   }
 
   return (
-    <div className="flex h-full flex-col">
+    // `min-w-0` is load-bearing: without it this flex column sizes to the
+    // table's intrinsic width, dragging the header and pagination out of the
+    // viewport instead of letting the table scroll inside its own region.
+    <div className="flex h-full w-full min-w-0 flex-col">
       <PageHeader
         title={descriptor.plural}
         accentClassName={descriptor.accentClassName}
@@ -161,7 +164,7 @@ export function EntityListView<
         </Toolbar>
       </PageHeader>
 
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-auto">
         {query.isPending ? (
           <LoadingState rows={8} label={`Loading ${descriptor.plural.toLowerCase()}`} />
         ) : query.isError ? (

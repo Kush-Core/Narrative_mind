@@ -68,7 +68,12 @@ export function WorkspaceLayout() {
       <div className="grid h-dvh grid-rows-[auto_1fr_auto] overflow-hidden bg-background text-foreground">
         <CommandBar auxPanelAvailable={!narrow} />
 
-        <div className="flex min-h-0">
+        {/* `min-w-0` alongside `min-h-0`: as a grid item this row defaults to
+            `min-width: auto`, so it sized to the panel group's min-content —
+            about 1100px — and the grid's `overflow-hidden` silently clipped the
+            excess. Every screen's right-hand controls were unreachable below
+            roughly 1100px. */}
+        <div className="flex min-h-0 min-w-0">
           {/* Collapsed, the explorer is a fixed icon rail rather than a
               resizable panel — a rail has no width worth dragging. */}
           {showExplorerPanel ? null : (
