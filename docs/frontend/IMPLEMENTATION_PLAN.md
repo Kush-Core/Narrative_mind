@@ -385,6 +385,77 @@ is independently reviewable and leaves the app in a working state.
 
 ---
 
+> **M6 as-built notes — Graph explorer (2026-07-19).**
+>
+> **The boundary decision.** The graph reuses *application* infrastructure
+> (`httpClient` + `ApiError`, TanStack Query and its pre-reserved `graph` key
+> namespace, Zod, the design system, routing) and reuses **none** of the entity
+> engine. The test applied throughout: *would a non-CRUD feature still need this?*
+> `createEntityResource`, `EntityDescriptor`, and `listParamsSchema` all failed it
+> — bending the graph through them would mean inventing pagination and form fields
+> for a thing that has neither. The graph is a **peer** of the entity engine, not
+> a consumer of it. Structure in COMPONENT_HIERARCHY.md §6b.
+>
+> **The backend constraint that shaped the whole module.** The ego-network
+> endpoint returns *reachable nodes and no relationships whatsoever* — no edge
+> list, no rel types, no indication of which neighbour is adjacent to which:
+>
+> ```cypher
+> OPTIONAL MATCH (c)-[*1..N]-(n)
+> RETURN c {.id,.name} AS center, collect(DISTINCT n {.id,.name,labels:labels(n)}) AS neighbors
+> ```
+>
+> At depth 1 every neighbour is adjacent by definition, so centre→neighbour edges
+> are facts and are drawn. At depth > 1 the response mixes one-, two-, and
+> three-hop nodes indistinguishably, so drawing those edges would **assert
+> relationships that were never reported**. The module therefore draws none beyond
+> depth 1, marks the nodes as unlinked, and says so in the UI. `edgesAreComplete`
+> travels on the model so renderer and notice cannot disagree.
+>
+> Verified against live data: depth 1 returned 5 genuinely-adjacent neighbours;
+> depth 2 returned 7 nodes — including one 2 hops away — with zero relationship
+> data of any kind.
+>
+> **This is the top backend enhancement candidate.** If the endpoint projected
+> relationships, only `services/build-graph-model.ts` would change; the model,
+> renderer, and components are already shaped for a real edge list.
+>
+> **A rendering bug only the browser could catch.** Design tokens are authored in
+> `oklch()`. Cytoscape's colour parser handles hex/rgb/hsl/named only, so every
+> token silently failed to parse and **every node painted grey while the DOM
+> legend beside it showed the correct colours** — a graph that looked plausible
+> and was wrong. Typecheck, lint, and 272 tests all passed on that build.
+>
+> The first fix was also wrong: Chrome *preserves the authored colour space*
+> through `getComputedStyle().color` **and** through `ctx.fillStyle` readback, so
+> a probe element returns `oklch(...)` too. The working approach is to rasterize
+> one pixel and read the sRGB channels back — the engine's own conversion. This
+> path cannot be unit-tested (jsdom does not resolve `var()`, and a mocked
+> assertion would have passed on the broken build), so it is deliberately verified
+> by driving a real browser instead.
+>
+> **Layouts, explicitly deferred.** Cytoscape needs *some* initial positioning or
+> every node stacks at the origin. `concentric` is used because it is the correct
+> shape for an ego network specifically and is deterministic; it is initial
+> positioning, not a layout system. Layout *choice* becomes an argument to one
+> object when it becomes a feature.
+>
+> **Not built, by instruction:** relationship create/delete, drag-to-connect,
+> editing, layout selection, timeline sync, AI, collaboration. Also not built:
+> the shortest-path view — its endpoint returns `hops`, a genuine ordered path
+> with real consecutive edges, and it would be a second `build*Model` function
+> feeding the same canvas. It was left out rather than shipping a data layer with
+> no UI.
+>
+> **Verified in a real browser** (Chrome via Playwright, backend + Neo4j live):
+> Cytoscape initializes; 6 nodes and 5 edges render with correct per-kind colours
+> and legible labels; zoom via buttons *and* wheel; pan by drag (canvas pixels
+> change); node selection populates the inspector; background click deselects;
+> fit and reset re-frame; the depth-2 notice appears; **zero console errors**.
+> 47 new tests (272 total).
+
+---
+
 ## M7 — World overview & global search
 
 - **Objective:** A meaningful landing surface and cross-entity discovery.

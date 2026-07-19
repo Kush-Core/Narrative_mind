@@ -245,6 +245,60 @@ plugs into the generic slots.
 
 ---
 
+## 6b. The Graph subsystem (as-built, M6)
+
+The Graph is **not** a layer in the stack above — it is a peer of the entity
+engine, with its own rendering, interaction, and state model. It rests on the same
+app core and shares no CRUD abstraction.
+
+```
+features/graph/
+├── model/       graph.types.ts   renderer-agnostic vocabulary (GraphModel, refs, viewport)
+│                graph.schema.ts  Zod validation of the two /graph reads
+├── api/         plain resource functions over the shared httpClient
+├── queries/     TanStack Query hooks (server state, shared cache + key registry)
+├── services/    build-graph-model.ts — pure backend-response → GraphModel
+├── engine/      renderer.ts       the GraphRenderer contract
+│   └─ cytoscape/                  the ONLY place Cytoscape is imported
+├── state/       useGraphInteraction — selection + mirrored viewport
+├── components/  GraphCanvas · ViewportControls · Inspector · Legend · SourcePicker
+└── pages/       GraphExplorerPage — composition only
+```
+
+**The engine boundary.** `GraphRenderer` is expressed entirely in the subsystem's
+own types; `import … from "cytoscape"` appears in exactly three files, all under
+`engine/cytoscape/`. Swapping the library is one new implementation plus one line
+in `engine/index.ts`. The interface is deliberately **imperative** — commands in,
+events out — because a graph is a stateful, animated, canvas-bound thing, and
+re-rendering it as a function of props would discard layout and camera state on
+every parent render.
+
+**Five kinds of state, five owners.** Backend data → TanStack Query. Which graph
+to show → URL params. Selection → view-scoped React state. Viewport authority →
+the renderer. Viewport for display → a read-only mirror. Nothing is duplicated:
+graph elements never enter React state, which is what keeps a large graph from
+re-rendering through the VDOM.
+
+**Shared with the entity engine: exactly two things.** The `httpClient` stack
+(transport, `ApiError`, cancellation, Zod validation) and the design system. Plus
+one new shared module, `shared/domain/entity-kinds.ts` — see §6c. The graph
+rejoins the app through a *route*, not an abstraction: the inspector links to an
+entity's detail screen.
+
+### 6c. `shared/domain/entity-kinds.ts`
+
+Entity **identity** (display name, icon, accent token, detail route) keyed by
+Neo4j node label. The CRUD descriptors already carried this, but bundled with a
+schema, a resource, form fields, and columns; the graph needs the identity and
+none of the rest. Importing a descriptor to get a colour would drag four CRUD
+slices into the graph bundle and couple two subsystems that should stay peers.
+
+It also carries `accentVar`, the *name* of the CSS custom property. Canvas
+renderers cannot use a Tailwind class, and duplicating an `oklch()` literal would
+drift from `tokens.css` — so the token is named here and resolved at runtime.
+
+---
+
 ## 7. Layer 5 — Layout / shell (the desktop chrome)
 
 In `app/shell/`. The persistent frame; a container layer that hosts routes.

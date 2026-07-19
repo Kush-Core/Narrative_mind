@@ -54,8 +54,8 @@ function entityRoutes(
   ]
 }
 
-/** Destinations whose slices are still to come (M6+). */
-const placeholderPaths = [paths.graph.explorer(), paths.graph.shortestPath()]
+/** Destinations whose slices are still to come (M7+). */
+const placeholderPaths = [paths.graph.shortestPath()]
 
 export const router = createBrowserRouter([
   {
@@ -87,6 +87,19 @@ export const router = createBrowserRouter([
             const slice = await import("@/features/events")
             return { list: slice.EventListPage, detail: slice.EventDetailPage }
           }),
+
+          // The graph is a subsystem, not an entity, so it mounts as its own
+          // route rather than through `entityRoutes`. Lazy-loading matters more
+          // here than anywhere else in the app: the rendering engine is the
+          // single heaviest dependency and must never reach the initial bundle
+          // (docs/frontend/FRONTEND_ARCHITECTURE.md §7.3).
+          {
+            path: paths.graph.explorer(),
+            lazy: async () => {
+              const { GraphExplorerPage } = await import("@/features/graph")
+              return { Component: GraphExplorerPage }
+            },
+          },
 
           ...placeholderPaths.map((path) => ({ path, element: <RoutePlaceholder /> })),
           { path: "*", element: <NotFoundRoute /> },

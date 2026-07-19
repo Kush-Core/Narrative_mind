@@ -119,6 +119,26 @@ identical logical queries share one cache entry.
 - **Future scalability:** a `worldId` path segment slots in ahead of these params
   with no change to the parsing hook's shape.
 
+> **As-built (M6) — the Graph subsystem's state boundaries.** The graph adds two
+> state kinds the entity engine never needed, and keeping them apart is what makes
+> the rendering engine replaceable:
+>
+> | State | Owner | Why there |
+> |---|---|---|
+> | Backend graph data | TanStack Query | ordinary server state, same cache and key registry as everything else |
+> | Which graph to show | URL (`?character=&depth=`) | D6 again — a view of the world stays shareable and survives reload |
+> | Selection | view-scoped React state | meaningless outside the workspace, so **not** the Zustand store |
+> | Viewport (authority) | the renderer, internally | pan/zoom is a high-frequency animated concern |
+> | Viewport (display) | a read-only mirror | so the toolbar can show a zoom % |
+>
+> Two rules earn their keep. **Selection is stored as an id reference, not a node
+> object**, and resolved against the current model at read time — so it cannot go
+> stale when data refetches, and no effect is needed to clear it. **The renderer
+> stays the viewport's authority**; the mirror is never fed back. Making React the
+> source of truth for pan/zoom would fight the library's own animation loop and
+> stutter every drag. Graph elements never enter React state at all, which is what
+> keeps a large graph from re-rendering through the VDOM.
+
 ### Why React Router over TanStack Router (Decision D9, revisited here)
 
 - **Decision:** Use React Router (declarative) for routing + URL state.

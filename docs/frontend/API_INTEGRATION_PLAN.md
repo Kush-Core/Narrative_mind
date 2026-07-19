@@ -195,6 +195,16 @@ Each is a fact from the analysis, with the required handling:
    Suggesting values from loaded data was **not** built: the only values available
    client-side are those on the current page, which is circular once a filter is
    applied. It needs a distinct-values endpoint to be worth doing.
+10. **The two `/graph` reads are the only untyped backend surface.** Both handlers
+   are declared `-> dict`, so FastAPI generates no response model and there is no
+   OpenAPI shape to lean on — Zod validation at this boundary is the only thing
+   between a changed Cypher projection and a crash inside the renderer.
+   **The ego-network response contains no relationships at all** — only reachable
+   nodes. Adjacency is therefore inferable at depth 1 and *not* at depth > 1; the
+   client draws edges only where they are facts (IMPLEMENTATION_PLAN.md M6). This
+   is the top backend enhancement candidate: projecting relationships alongside
+   nodes would change one client file.
+
 9. **Relationships are Character-rooted** (`POST /characters/{id}/relationships`),
    `rel_type ∈ {KNOWS, MEMBER_OF, LOCATED_IN, PARTICIPATED_IN}`, `sentiment`
    meaningful only for `KNOWS`, and the backend does **not** enforce target type

@@ -106,7 +106,6 @@ export const navSections: NavSection[] = [
         path: paths.graph.explorer(),
         icon: WaypointsIcon,
         shortcut: "g g",
-        pending: true,
       },
       {
         id: "shortest-path",

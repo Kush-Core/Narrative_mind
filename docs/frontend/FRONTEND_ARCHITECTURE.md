@@ -256,6 +256,12 @@ honoring "future compatibility matters, implementation does not."
 3. **Graph renderer swap:** the graph feature hides its visualization behind a
    `GraphRenderer` interface, so the actual layout/drawing library is chosen and
    swapped in isolation without touching data or app code.
+   *As-built (M6):* the renderer is Cytoscape 3.34, and `import … from
+   "cytoscape"` appears in exactly three files, all under
+   `features/graph/engine/cytoscape/`. The interface is expressed wholly in the
+   subsystem's own types, so a swap is one new implementation plus one line in
+   `engine/index.ts`. The whole subsystem is a lazy route chunk (~458 kB), so the
+   heaviest dependency in the app never touches initial load.
 4. **Multi-world / projects:** if the backend later adds world scoping, a
    `worldId` slots into the query-key registry and resource layer as a prefix; the
    descriptor engine is unaffected.

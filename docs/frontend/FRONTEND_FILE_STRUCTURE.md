@@ -177,14 +177,13 @@ features/
 ├── locations/              (same shape; region filter (text); no relationships)
 ├── factions/               (same shape; ideology filter (text); no relationships)
 ├── events/                 (same shape; timeline_order default sort; no categorical filter)
-├── graph/                  Relationship/graph reasoning surface
-│   ├── index.ts
-│   ├── api/graph.api.ts     ego-network + shortest-path resource functions
-│   ├── queries/graph.queries.ts
-│   ├── model/graph.schema.ts
-│   ├── render/GraphRenderer.ts   Interface (library-agnostic seam)
-│   ├── render/…              Concrete renderer (chosen at build time, isolated)
-│   └── pages/GraphExplorerPage.tsx, ShortestPathPage.tsx
+├── graph/                  Graph subsystem — a peer of the entity engine, not a slice of it
+│   ├── model/              renderer-agnostic types + Zod wire schemas
+│   ├── api/ queries/       plain resource fns over httpClient; TanStack Query hooks
+│   ├── services/           pure backend-response -> GraphModel
+│   ├── engine/             GraphRenderer contract; cytoscape/ is its only importer
+│   ├── state/              selection + mirrored viewport
+│   └── components/ pages/  canvas, controls, inspector, legend, picker, workspace
 ├── world/                  Overview/home ("dashboard of nothing" avoided —
 │   └── pages/OverviewPage.tsx   world summary, recent activity, entry points)
 ├── system/                 Backend liveness (/health) — see as-built note below
