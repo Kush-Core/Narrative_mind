@@ -145,6 +145,7 @@ identical logical queries share one cache entry.
 > | Backend graph data | TanStack Query | ordinary server state, same cache and key registry as everything else |
 > | Which graph to show | URL (`?character=&depth=`) | D6 again — a view of the world stays shareable and survives reload |
 > | Selection | view-scoped React state | meaningless outside the workspace, so **not** the Zustand store |
+> | **Editing** (M9) | `useGraphEditing`, view-scoped | a half-made connection must not survive navigation, and nothing outside the canvas can act on it |
 > | Viewport (authority) | the renderer, internally | pan/zoom is a high-frequency animated concern |
 > | Viewport (display) | a read-only mirror | so the toolbar can show a zoom % |
 >
@@ -155,6 +156,20 @@ identical logical queries share one cache entry.
 > source of truth for pan/zoom would fight the library's own animation loop and
 > stutter every drag. Graph elements never enter React state at all, which is what
 > keeps a large graph from re-rendering through the VDOM.
+>
+> **As-built (M9) — editing is a sixth owner, and deliberately not a renderer
+> concern.** `useGraphEditing` holds which node a connection started from, which
+> may receive it, and which is being previewed. It hands the renderer a single
+> *appearance* instruction (`setEditingVisual`) and imports the engine not at all.
+> The rules it applies are pure functions in `services/connect-rules.ts`, which in
+> turn defer to `shared/domain/relationships.ts` — so the graph and the entity
+> screens are governed by one statement of what may connect to what, rather than
+> two that could drift.
+>
+> Selection is now a **list with a primary** (the most recent). Multi-selection
+> exists to frame a subset; the inspector still describes exactly one element.
+> Holding both readings in one hook is what stops "which one did they mean" being
+> re-decided at every call site.
 
 ### Why React Router over TanStack Router (Decision D9, revisited here)
 

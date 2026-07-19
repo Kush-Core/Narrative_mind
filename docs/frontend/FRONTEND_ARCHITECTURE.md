@@ -260,8 +260,18 @@ honoring "future compatibility matters, implementation does not."
    "cytoscape"` appears in exactly three files, all under
    `features/graph/engine/cytoscape/`. The interface is expressed wholly in the
    subsystem's own types, so a swap is one new implementation plus one line in
-   `engine/index.ts`. The whole subsystem is a lazy route chunk (~458 kB), so the
+   `engine/index.ts`. The whole subsystem is a lazy route chunk (~486 kB), so the
    heaviest dependency in the app never touches initial load.
+
+   *As-built (M9) — the boundary survived editing, which was its real test.*
+   Adding selection, hover, a context menu, and click-to-connect grew the
+   contract by five members (`setEditingVisual`, `fitTo`, `centerOn`, and the
+   `hoverChange` / `elementContextMenu` / `backgroundTap` events) and moved no
+   Cytoscape type above the engine. The rule applied throughout: the renderer is
+   handed an *appearance* and reports *intent*; it is never told what a
+   relationship is or which pairings are legal. Those live in
+   `shared/domain/relationships.ts` and `features/graph/services/connect-rules.ts`,
+   neither of which imports the engine. See COMPONENT_HIERARCHY.md §6b–6e.
 4. **Multi-world / projects:** if the backend later adds world scoping, a
    `worldId` slots into the query-key registry and resource layer as a prefix; the
    descriptor engine is unaffected.

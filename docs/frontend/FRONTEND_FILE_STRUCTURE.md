@@ -180,10 +180,11 @@ features/
 ├── graph/                  Graph subsystem — a peer of the entity engine, not a slice of it
 │   ├── model/              renderer-agnostic types + Zod wire schemas
 │   ├── api/ queries/       plain resource fns over httpClient; TanStack Query hooks
-│   ├── services/           pure backend-response -> GraphModel
+│   ├── services/           pure: backend-response -> GraphModel; connect rules (M9)
 │   ├── engine/             GraphRenderer contract; cytoscape/ is its only importer
-│   ├── state/              selection + mirrored viewport
-│   └── components/ pages/  canvas, controls, inspector, legend, picker, workspace
+│   ├── state/              selection + hover + mirrored viewport; editing (M9)
+│   └── components/ pages/  canvas, controls, inspector, legend, picker,
+│                           context menu, connect banner (M9), workspace
 ├── world/                  Overview/home ("dashboard of nothing" avoided —
 │   └── pages/OverviewPage.tsx   world summary, recent activity, entry points)
 ├── system/                 Backend liveness (/health) — see as-built note below

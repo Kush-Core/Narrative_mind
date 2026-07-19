@@ -205,6 +205,83 @@ function buildRules(token: (name: string, fallback: string) => string): Styleshe
         "z-index": 20,
       },
     },
+
+    /* ------------------------------------------------------ hover feedback */
+
+    /**
+     * Hover is a *pointer-frequency* concern, so it is a class the renderer
+     * toggles rather than anything React sees. It reads as "this is clickable",
+     * which is the whole job — a brighter ring, no size change, because a node
+     * that grows on hover makes a dense graph twitch as the pointer crosses it.
+     */
+    {
+      selector: "node.is-hovered",
+      style: {
+        "border-width": 3,
+        "border-color": foreground,
+      },
+    },
+    {
+      selector: "edge.is-hovered",
+      style: {
+        width: 2.5,
+        "line-color": muted,
+        opacity: 1,
+      },
+    },
+
+    /* ----------------------------------------------------- editing feedback */
+
+    /**
+     * The three editing states, painted from `setEditingVisual`.
+     *
+     * The renderer is *told* which nodes are legal destinations; it does not
+     * know why. Validity is decided in `shared/domain/relationships.ts`, which
+     * is what lets the same rule govern the graph and the dialog.
+     */
+    {
+      selector: "node.edit-source",
+      style: {
+        "border-width": 4,
+        "border-color": ring,
+        "border-style": "solid",
+        opacity: 1,
+        "z-index": 25,
+      },
+    },
+    {
+      // A legal destination stays fully lit and gains a soft ring, so the eye
+      // lands on the set of things that *can* be clicked.
+      selector: "node.edit-valid",
+      style: {
+        "border-width": 3,
+        "border-color": foreground,
+        opacity: 1,
+      },
+    },
+    {
+      // Invalid is communicated by receding, not by a warning colour: a graph
+      // full of red would read as errors rather than as "not these".
+      selector: ".edit-invalid",
+      style: {
+        opacity: 0.2,
+      },
+    },
+    {
+      // The connection being previewed. Dashed and un-arrowed: it is a proposal,
+      // and drawing it like a real edge would misreport the graph's contents.
+      selector: `edge[id = "__preview__"]`,
+      style: {
+        width: 2,
+        "line-color": ring,
+        "line-style": "dashed",
+        "target-arrow-shape": "triangle",
+        "target-arrow-color": ring,
+        "arrow-scale": 0.85,
+        opacity: 1,
+        "z-index": 30,
+      },
+    },
     /**
      * The relationship type is revealed on selection, not painted on every edge.
      *

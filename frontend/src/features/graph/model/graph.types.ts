@@ -90,6 +90,39 @@ export type GraphElementRef = { element: "node"; id: string } | { element: "edge
 export type GraphSelection =
   { element: "node"; node: GraphNode } | { element: "edge"; edge: GraphEdge }
 
+/* ----------------------------------------------------------------- editing */
+
+/**
+ * How an in-progress edit should *look*.
+ *
+ * Deliberately a description of appearance, not of behaviour: the renderer is
+ * told which node is the origin, which nodes may legally receive the connection,
+ * and which one is currently being previewed. It is not told what a relationship
+ * is, which types exist, or what happens on confirm — all of that stays in
+ * `state/useGraphEditing.ts` and `shared/relationships/`.
+ *
+ * That split is what keeps editing logic independent of the drawing library. A
+ * different renderer implements this by painting differently; none of the rules
+ * about what may connect to what move with it.
+ */
+export interface GraphEditingVisual {
+  /** The node the connection is being drawn from. */
+  sourceId: string
+  /**
+   * Nodes that may legally receive it. Everything else is dimmed, so "invalid"
+   * is communicated by absence rather than by a second list.
+   */
+  validTargetIds: readonly string[]
+  /** The valid target currently under the pointer, if any. */
+  previewTargetId?: string
+}
+
+/** A point in viewport (screen) coordinates — where the pointer was. */
+export interface GraphPoint {
+  x: number
+  y: number
+}
+
 /* ---------------------------------------------------------------- viewport */
 
 /**

@@ -1,7 +1,7 @@
-import { ArrowUpRightIcon } from "lucide-react"
+import { ArrowUpRightIcon, WaypointsIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 
-import type { GraphModel, GraphSelection } from "@/features/graph/model/graph.types"
+import type { GraphModel, GraphNode, GraphSelection } from "@/features/graph/model/graph.types"
 import { entityKindIdentity } from "@/shared/domain/entity-kinds"
 import { cn } from "@/shared/lib/utils"
 import { Badge } from "@/shared/ui/badge"
@@ -23,15 +23,24 @@ import { SectionLabel } from "@/shared/ui/composite/SectionLabel"
 interface GraphInspectorProps {
   selection: GraphSelection | null
   model: GraphModel
+  /** How many elements are selected in total; the inspector describes the last. */
+  selectedCount: number
+  /** Starts the shared relationship workflow from this node. */
+  onConnect: (node: GraphNode) => void
 }
 
-export function GraphInspector({ selection, model }: GraphInspectorProps) {
+export function GraphInspector({
+  selection,
+  model,
+  selectedCount,
+  onConnect,
+}: GraphInspectorProps) {
   if (!selection) {
     return (
       <div className="flex flex-col gap-3 p-5">
         <SectionLabel>Selection</SectionLabel>
         <p className="text-xs text-muted-foreground">
-          Select a node or an edge to inspect it. Double-click a node to open it.
+          Select a node or an edge to inspect it. Double-click to open, right-click for actions.
         </p>
       </div>
     )
@@ -103,13 +112,39 @@ export function GraphInspector({ selection, model }: GraphInspectorProps) {
         <Fact label="Identifier" value={<code className="font-mono text-xs">{node.id}</code>} />
       </dl>
 
-      {detailPath ? (
-        <Button asChild variant="outline" size="sm" className="self-start">
-          <Link to={detailPath}>
-            Open {identity.singular.toLowerCase()}
-            <ArrowUpRightIcon aria-hidden />
-          </Link>
-        </Button>
+      <div className="flex flex-col gap-2">
+        {detailPath ? (
+          <Button asChild variant="outline" size="sm" className="self-start">
+            <Link to={detailPath}>
+              Open {identity.singular.toLowerCase()}
+              <ArrowUpRightIcon aria-hidden />
+            </Link>
+          </Button>
+        ) : null}
+
+        {/* The same action the context menu and the toolbar offer — one
+            handler, three ways to reach it. */}
+        {identity.collection ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={() => onConnect(node)}
+          >
+            <WaypointsIcon aria-hidden />
+            Connect to…
+          </Button>
+        ) : null}
+      </div>
+
+      {/* Multi-selection is for framing, so it is reported rather than
+          enumerated: the panel keeps describing one element, and the count says
+          why the canvas shows more. */}
+      {selectedCount > 1 ? (
+        <p className="text-2xs text-muted-foreground">
+          {selectedCount} elements selected. Use <span className="font-medium">Fit selection</span>{" "}
+          to frame them.
+        </p>
       ) : null}
     </div>
   )

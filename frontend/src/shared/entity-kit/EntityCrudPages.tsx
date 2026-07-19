@@ -1,13 +1,14 @@
 import { useState } from "react"
 import type { FieldValues } from "react-hook-form"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import { EntityDetailView } from "@/shared/entity-kit/EntityDetailView"
 import { EntityFormDialog } from "@/shared/entity-kit/EntityFormDialog"
 import { EntityListView } from "@/shared/entity-kit/EntityListView"
-import { ENTITY_ID_PARAM } from "@/shared/entity-kit/route-params"
+import { ENTITY_EDIT_PARAM, ENTITY_ID_PARAM } from "@/shared/entity-kit/route-params"
 import type { BaseListParams, EntityDescriptor } from "@/shared/entity-kit/types"
 import { useEntityMutations } from "@/shared/entity-kit/useEntityMutations"
+import { useEntityQuery } from "@/shared/entity-kit/useEntityQueries"
 import type { Identifiable, UnknownRecord } from "@/shared/types/utility"
 import { ConfirmDialog } from "@/shared/ui/composite/ConfirmDialog"
 
@@ -83,12 +84,40 @@ export function EntityDetailPage<
   const params = useParams<EntityRouteParams>()
   const id = params[ENTITY_ID_PARAM]
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [editing, setEditing] = useState<TRead | undefined>(undefined)
   const [pendingDelete, setPendingDelete] = useState<TRead | undefined>(undefined)
   const { remove } = useEntityMutations(descriptor)
 
+  /**
+   * `?edit=1` opens the edit dialog on arrival, so editing is reachable by link.
+   *
+   * The entity is read with the same hook and key `EntityDetailView` uses, so
+   * TanStack Query serves it from cache — this costs no extra request. Derived
+   * rather than pushed into state by an effect: an effect would render once
+   * without the dialog and once with it, and would need clearing logic when the
+   * param goes away.
+   */
+  const wantsEdit = searchParams.get(ENTITY_EDIT_PARAM) === "1"
+  const linkedEntity = useEntityQuery(descriptor, id ?? "", { enabled: wantsEdit && Boolean(id) })
+  const entityToEdit = editing ?? (wantsEdit ? linkedEntity.data : undefined)
+
   const noun = descriptor.singular.toLowerCase()
+
+  /** Closing must also drop the intent, or the dialog reopens on every render. */
+  function closeEditor() {
+    setEditing(undefined)
+    if (!wantsEdit) return
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete(ENTITY_EDIT_PARAM)
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   if (!id) return null
 
@@ -113,9 +142,9 @@ export function EntityDetailPage<
 
       <EntityFormDialog
         descriptor={descriptor}
-        open={editing !== undefined}
-        onOpenChange={(open) => !open && setEditing(undefined)}
-        entity={editing}
+        open={entityToEdit !== undefined}
+        onOpenChange={(open) => !open && closeEditor()}
+        entity={entityToEdit}
       />
 
       <ConfirmDialog

@@ -621,6 +621,89 @@ is independently reviewable and leaves the app in a working state.
 
 ---
 
+## M9 — Graph editing (added after M6; the final planned frontend milestone)
+
+- **Objective:** Turn the Graph from a visualization into an interactive
+  world-building workspace — selection, context actions, and relationship
+  creation performed on the canvas itself.
+- **Deliverables:** node hover/selection/multi-selection, a node context menu,
+  click-to-connect relationship creation, richer viewport commands (animated
+  zoom, fit selection, centre on node), and editing-state visual feedback.
+- **Dependencies:** M5 (the shared relationship workflow it delegates to), M6
+  (the renderer and its boundary).
+
+> **M9 as-built notes — Graph editing (2026-07-19).**
+>
+> **The rule that kept it from becoming a second application.** Every editing
+> action leaves through a door that already existed: opening and editing an
+> entity are *routes* into the CRUD screens; creating a relationship is the
+> shared `RelationshipDialog` with both ends pre-filled. The graph contributes
+> the gesture and the feedback — not a parallel implementation. The only new
+> domain code is `services/connect-rules.ts`, and even that defers to
+> `shared/domain/relationships.ts` for what may connect to what.
+>
+> **The dialog was generalized rather than duplicated.** It previously took an
+> `anchor` — "the entity you opened from, plus its role". The graph decides
+> *both* ends before a type is chosen, which that shape could not express. It now
+> takes `RelationshipEndpoints` (`{ source?, target? }`), and the three surfaces
+> each fill in what they know: a detail screen fixes one end via
+> `endpointsForEntity`, the graph fixes both via `resolveRelationshipEndpoints`,
+> and an unanchored open fixes neither. One form, one validation path, one
+> mutation.
+>
+> **Click-to-connect, not drag-to-connect.** The milestone was titled "drag to
+> connect", but its own numbered steps describe a click sequence (select source →
+> initiate → select destination → choose type → confirm), and that is what was
+> built. Nodes are `autoungrabify` by design — the backend has no field for a
+> persisted position — so a drag gesture is unclaimed, but a click sequence is
+> keyboard- and touch-reachable and matches the specified steps. The gesture
+> remains available if drag is later wanted.
+>
+> **Validity is derived from the backend, not invented.** Because relationship
+> writes are rooted at a Character, a Location→Faction edge is not merely
+> unsupported by the UI — no request would create it. `canRelate` states that
+> once; connect mode lights the nodes that pass and dims the rest, so the
+> affordance and the endpoint agree by construction. Starting from a
+> non-Character simply inverts the direction: the character you click becomes the
+> source.
+>
+> **Two bugs only a browser could catch**, both found by driving the real app:
+>
+> 1. *Additive selection silently did nothing.* Cytoscape's
+>    `selectionType: "single"` replaces the selection on every tap — shift adds
+>    only for box selection. The first fix restored the previous selection inside
+>    the `tap` handler and was also wrong: instrumenting the event order showed
+>    `tapstart → tap → unselect → select`, so the library overwrote the fix a
+>    moment later. The intent is now captured at `tapstart` and applied in the
+>    animation frame that already coalesces the outgoing event, by which point the
+>    library has settled.
+> 2. *The connect banner made a node unclickable.* It sat at the top edge, and
+>    with only 48px of fit padding it covered the highest node — potentially the
+>    one being connected to. Moved to the bottom, where this workspace already
+>    puts transient notices.
+>
+> **Performance: the common edit costs no rebuild.** `setModel` now compares node
+> and edge signatures separately. Connecting two nodes already on screen changes
+> only the edge set, so edges are patched in place — no teardown, no layout, no
+> camera move. Verified in the browser: the graph went from 2 edges to 3 without
+> a reinitialization, and the new edge appeared where it was drawn. A changed
+> *node* set still relayouts (positions must be recomputed) but now restores the
+> camera instead of re-fitting.
+>
+> **Verified in a real browser** (Chrome via Playwright, backend + Neo4j live):
+> 24 checks covering selection, shift-additive selection, fit-selection, the
+> context menu and its five actions, connect mode's valid/invalid marking, the
+> hover preview edge, the shared dialog arriving with both ends fixed, the
+> in-place edge update, cleanup of editing decoration after a write, and the
+> `?edit=1` deep link. Plus regression runs of the M5 flows and the edit dialog
+> on all four entity types. **Zero console errors.** 24 new unit tests (334
+> total).
+>
+> **Not built, by instruction:** AI features, timeline editing, backend changes,
+> edge editing, and relationship deletion.
+
+---
+
 ## Deferred / out-of-scope seams (built only when approved)
 
 These are explicitly **not** in the milestones above; the architecture leaves each

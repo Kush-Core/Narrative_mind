@@ -11,14 +11,21 @@ import { describe, expect, it } from "vitest"
 
 import { ENTITY_KINDS } from "@/shared/domain/entity-kinds"
 import {
+  canRelate,
+  endpointsForEntity,
   isRelationshipType,
   RELATIONSHIP_TYPE_DEFINITIONS,
   RELATIONSHIP_TYPES,
-  relationshipAnchor,
+  type RelationshipEndpoint,
   relationshipRoleFor,
   relationshipTypeDefinition,
-  relationshipTypesForAnchor,
+  relationshipTypesForEndpoints,
+  resolveRelationshipEndpoints,
 } from "@/shared/domain/relationships"
+
+function endpoint(kind: RelationshipEndpoint["kind"], name: string): RelationshipEndpoint {
+  return { id: `${kind}-${name}`, name, kind }
+}
 
 describe("the catalog", () => {
   it("matches the backend's allowed set exactly", () => {
@@ -54,7 +61,7 @@ describe("the catalog", () => {
   })
 })
 
-describe("anchor roles", () => {
+describe("endpoint roles", () => {
   it("makes a Character the source", () => {
     expect(relationshipRoleFor("Character")).toBe("source")
   })
@@ -67,45 +74,110 @@ describe("anchor roles", () => {
     }
   })
 
-  it("carries the entity's identity alongside its role", () => {
-    expect(relationshipAnchor("Faction", "f-1", "The Tidebinders")).toEqual({
-      role: "target",
-      kind: "Faction",
-      id: "f-1",
-      name: "The Tidebinders",
+  it("fixes a Character as the source end", () => {
+    expect(endpointsForEntity("Character", "c-1", "Mira")).toEqual({
+      source: { id: "c-1", name: "Mira", kind: "Character" },
+    })
+  })
+
+  it("fixes every other kind as the target end", () => {
+    expect(endpointsForEntity("Faction", "f-1", "The Tidebinders")).toEqual({
+      target: { id: "f-1", name: "The Tidebinders", kind: "Faction" },
     })
   })
 })
 
-describe("types offered for an anchor", () => {
-  it("offers every type when the anchor is the source", () => {
-    const anchor = relationshipAnchor("Character", "c-1", "Mira")
-    expect(relationshipTypesForAnchor(anchor)).toHaveLength(RELATIONSHIP_TYPES.length)
+describe("types offered for fixed endpoints", () => {
+  it("offers every type when only the source is fixed", () => {
+    const endpoints = endpointsForEntity("Character", "c-1", "Mira")
+    expect(relationshipTypesForEndpoints(endpoints)).toHaveLength(RELATIONSHIP_TYPES.length)
   })
 
-  it("offers every type when there is no anchor at all", () => {
-    expect(relationshipTypesForAnchor(undefined)).toHaveLength(RELATIONSHIP_TYPES.length)
+  it("offers every type when nothing is fixed", () => {
+    expect(relationshipTypesForEndpoints(undefined)).toHaveLength(RELATIONSHIP_TYPES.length)
   })
 
-  it("narrows to the types that point at a pinned target's kind", () => {
-    // From a Faction page the only expressible statement is membership; the
-    // other three would be offering ways to write something meaningless.
-    expect(
-      relationshipTypesForAnchor(relationshipAnchor("Faction", "f-1", "Salt Guild")).map(
-        (definition) => definition.type,
-      ),
-    ).toEqual(["MEMBER_OF"])
+  it("narrows to the types that point at a fixed target's kind", () => {
+    // From a Faction the only expressible statement is membership; the other
+    // three would be offering ways to write something meaningless.
+    const cases = [
+      ["Faction", "MEMBER_OF"],
+      ["Location", "LOCATED_IN"],
+      ["Event", "PARTICIPATED_IN"],
+    ] as const
 
-    expect(
-      relationshipTypesForAnchor(relationshipAnchor("Location", "l-1", "Greyfen")).map(
-        (definition) => definition.type,
-      ),
-    ).toEqual(["LOCATED_IN"])
+    for (const [kind, expected] of cases) {
+      const endpoints = endpointsForEntity(kind, "x-1", "Something")
+      expect(relationshipTypesForEndpoints(endpoints).map((d) => d.type)).toEqual([expected])
+    }
+  })
+})
 
-    expect(
-      relationshipTypesForAnchor(relationshipAnchor("Event", "e-1", "The Drowning")).map(
-        (definition) => definition.type,
-      ),
-    ).toEqual(["PARTICIPATED_IN"])
+describe("canRelate — what the graph may offer as a destination", () => {
+  it("allows any pairing that includes a Character", () => {
+    for (const kind of ENTITY_KINDS) {
+      expect(canRelate("Character", kind)).toBe(true)
+      expect(canRelate(kind, "Character")).toBe(true)
+    }
+  })
+
+  it("refuses a pairing with no Character in it", () => {
+    // There is no request that would create a Location→Faction edge; the write
+    // endpoint is a sub-resource of a character.
+    expect(canRelate("Location", "Faction")).toBe(false)
+    expect(canRelate("Event", "Location")).toBe(false)
+  })
+})
+
+describe("resolveRelationshipEndpoints — which end is which", () => {
+  it("makes the Character the source when it is the one started from", () => {
+    const result = resolveRelationshipEndpoints(
+      endpoint("Character", "Mira"),
+      endpoint("Faction", "Tidebinders"),
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.endpoints.source.name).toBe("Mira")
+    expect(result.endpoints.target.name).toBe("Tidebinders")
+  })
+
+  it("inverts the direction when only the destination can be a source", () => {
+    // Starting a connection from a Location is meaningful; it just means the
+    // character being picked is the source.
+    const result = resolveRelationshipEndpoints(
+      endpoint("Location", "Greyfen"),
+      endpoint("Character", "Mira"),
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.endpoints.source.name).toBe("Mira")
+    expect(result.endpoints.target.name).toBe("Greyfen")
+  })
+
+  it("keeps the gesture's direction when both ends are Characters", () => {
+    // `from` knows `to`, not the reverse — the edge should match what the user
+    // drew, since both orderings are expressible.
+    const result = resolveRelationshipEndpoints(
+      endpoint("Character", "Mira"),
+      endpoint("Character", "Corin"),
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.endpoints.source.name).toBe("Mira")
+    expect(result.endpoints.target.name).toBe("Corin")
+  })
+
+  it("refuses a pairing the backend could not express, and says why", () => {
+    const result = resolveRelationshipEndpoints(
+      endpoint("Location", "Greyfen"),
+      endpoint("Faction", "Salt Guild"),
+    )
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.reason).toContain("must involve a character")
   })
 })

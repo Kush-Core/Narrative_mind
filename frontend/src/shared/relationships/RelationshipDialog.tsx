@@ -7,7 +7,7 @@ import { isApiError } from "@/shared/api/api-error"
 import { toUserMessage } from "@/shared/api/error-presentation"
 import { type EntityKind, entityKindIdentity } from "@/shared/domain/entity-kinds"
 import {
-  type RelationshipAnchor,
+  type RelationshipEndpoints,
   type RelationshipType,
   relationshipTypeDefinition,
 } from "@/shared/domain/relationships"
@@ -51,29 +51,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
  * page therefore *cannot* mean "this faction relates to something" — the only
  * expressible statement is "some character is a member of this faction".
  *
- * So the anchor carries a role (`shared/domain/relationships.ts`): from a
- * Character it pins the source and the writer picks the target; from anything
- * else it pins the target and the writer picks the character. Either way exactly
- * one end is prefilled and the writer fills the other, which is what the feature
- * asks for — the direction just follows the data model rather than the screen
- * the user happens to be standing on.
+ * So the dialog takes the **endpoints that are already fixed** rather than "the
+ * entity it was opened from" (`shared/domain/relationships.ts`). Every surface
+ * expresses itself in those terms and none of them has to know about the others:
  *
- * With no anchor at all, both ends are pickable. Nothing wires that up today; it
- * is what a future graph-side entry point would use.
+ *  - An entity detail screen fixes one end — the source from a Character, the
+ *    target from anything else — via `endpointsForEntity`.
+ *  - The graph's connect flow fixes **both**, having resolved which node can be
+ *    the source via `resolveRelationshipEndpoints`.
+ *  - With nothing fixed, both ends are pickable.
+ *
+ * All three land in the same form, the same validation, and the same mutation.
+ * That is what stops the graph growing a second relationship implementation.
  */
 
 interface RelationshipDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** The entity this was opened from, and which end it occupies. */
-  anchor?: RelationshipAnchor
+  /**
+   * Ends that are already decided. Whatever is absent is picked in the dialog.
+   */
+  endpoints?: RelationshipEndpoints
   onCreated?: () => void
 }
 
 export function RelationshipDialog({
   open,
   onOpenChange,
-  anchor,
+  endpoints,
   onCreated,
 }: RelationshipDialogProps) {
   // Remounting on each open is what resets the form; the inner component holds
@@ -83,7 +88,7 @@ export function RelationshipDialog({
       <DialogContent className="sm:max-w-xl">
         {open ? (
           <RelationshipDialogBody
-            anchor={anchor}
+            endpoints={endpoints}
             onClose={() => onOpenChange(false)}
             onCreated={onCreated}
           />
@@ -94,28 +99,28 @@ export function RelationshipDialog({
 }
 
 function RelationshipDialogBody({
-  anchor,
+  endpoints,
   onClose,
   onCreated,
 }: {
-  anchor?: RelationshipAnchor
+  endpoints?: RelationshipEndpoints
   onClose: () => void
   onCreated?: () => void
 }) {
-  const { types } = useRelationshipTypes(anchor)
+  const { types } = useRelationshipTypes(endpoints)
   const mutation = useCreateRelationship()
 
-  const anchoredSource = anchor?.role === "source" ? anchor : undefined
-  const anchoredTarget = anchor?.role === "target" ? anchor : undefined
+  const fixedSource = endpoints?.source
+  const fixedTarget = endpoints?.target
 
   const form = useForm<RelationshipForm>({
     resolver: zodResolver(RelationshipFormSchema),
     mode: "onBlur",
     defaultValues: {
-      sourceId: anchoredSource?.id ?? "",
+      sourceId: fixedSource?.id ?? "",
       // With one type available the choice is not a choice, so it is made.
       relType: (types.length === 1 ? types[0]?.type : undefined) as RelationshipType,
-      targetId: anchoredTarget?.id ?? "",
+      targetId: fixedTarget?.id ?? "",
       sentiment: "",
     },
   })
@@ -132,13 +137,13 @@ function RelationshipDialogBody({
   // The chosen type decides which collection the target picker searches, which
   // is how the UI guides valid pairings without enforcing a rule the backend
   // does not (see `shared/domain/relationships.ts`).
-  const targetKind: EntityKind = anchoredTarget?.kind ?? definition?.targetKind ?? "Character"
+  const targetKind: EntityKind = fixedTarget?.kind ?? definition?.targetKind ?? "Character"
 
   // Names are tracked alongside the ids because the review line and the success
   // toast both need them, and the pickers already have them — resolving an id
   // back to a name would be a request for a label we were just handed.
-  const [sourceName, setSourceName] = useState(anchoredSource?.name)
-  const [targetName, setTargetName] = useState(anchoredTarget?.name)
+  const [sourceName, setSourceName] = useState(fixedSource?.name)
+  const [targetName, setTargetName] = useState(fixedTarget?.name)
 
   /**
    * Changing the type changes what a valid target *is*, so a target chosen
@@ -152,7 +157,7 @@ function RelationshipDialogBody({
    */
   function handleTypeChange(next: string, onChange: (value: string) => void) {
     onChange(next)
-    if (anchoredTarget) return
+    if (fixedTarget) return
     setValue("targetId", "", { shouldValidate: false })
     setTargetName(undefined)
   }
@@ -187,11 +192,7 @@ function RelationshipDialogBody({
     <>
       <DialogHeader>
         <DialogTitle>New relationship</DialogTitle>
-        <DialogDescription>
-          {anchor
-            ? `Connect ${anchor.name} to another part of your world.`
-            : "Connect two entities in your world."}
-        </DialogDescription>
+        <DialogDescription>{describeIntent(endpoints)}</DialogDescription>
       </DialogHeader>
 
       <form
@@ -205,14 +206,14 @@ function RelationshipDialogBody({
           required
           error={formState.errors.sourceId?.message}
           description={
-            anchoredSource
+            fixedSource
               ? undefined
               : "Relationships are recorded from a character outward, so the connection starts here."
           }
         >
           {({ id, describedBy, invalid }) =>
-            anchoredSource ? (
-              <PinnedEntity kind={anchoredSource.kind} name={anchoredSource.name} />
+            fixedSource ? (
+              <PinnedEntity kind={fixedSource.kind} name={fixedSource.name} />
             ) : (
               <Controller
                 control={control}
@@ -279,13 +280,11 @@ function RelationshipDialogBody({
               ? "An entity cannot be related to itself."
               : formState.errors.targetId?.message
           }
-          description={
-            !relType && !anchoredTarget ? "Choose a relationship type first." : undefined
-          }
+          description={!relType && !fixedTarget ? "Choose a relationship type first." : undefined}
         >
           {({ id, describedBy, invalid }) =>
-            anchoredTarget ? (
-              <PinnedEntity kind={anchoredTarget.kind} name={anchoredTarget.name} />
+            fixedTarget ? (
+              <PinnedEntity kind={fixedTarget.kind} name={fixedTarget.name} />
             ) : (
               <Controller
                 control={control}
@@ -415,4 +414,20 @@ function Part({ value, placeholder }: { value?: string; placeholder: string }) {
 
 function isNotFound(error: unknown): boolean {
   return isApiError(error) && error.isNotFound
+}
+
+/**
+ * What the writer is here to do, phrased from what is already decided.
+ *
+ * Both ends fixed means the graph sent them here with only the type left to
+ * choose, and saying so is more useful than repeating the names they can read
+ * in the fields below.
+ */
+function describeIntent(endpoints: RelationshipEndpoints | undefined): string {
+  const { source, target } = endpoints ?? {}
+
+  if (source && target) return "Choose how these two are connected."
+  if (source) return `Connect ${source.name} to another part of your world.`
+  if (target) return `Record which characters connect to ${target.name}.`
+  return "Connect two entities in your world."
 }

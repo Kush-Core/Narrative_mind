@@ -279,17 +279,78 @@ app core and shares no CRUD abstraction.
 
 ```
 features/graph/
-├── model/       graph.types.ts   renderer-agnostic vocabulary (GraphModel, refs, viewport)
+├── model/       graph.types.ts   renderer-agnostic vocabulary (GraphModel, refs,
+│                                 viewport, GraphEditingVisual)
 │                graph.schema.ts  Zod validation of the two /graph reads
 ├── api/         plain resource functions over the shared httpClient
 ├── queries/     TanStack Query hooks (server state, shared cache + key registry)
 ├── services/    build-graph-model.ts — pure backend-response → GraphModel
+│                connect-rules.ts    — pure: what may connect, and how it looks
 ├── engine/      renderer.ts       the GraphRenderer contract
 │   └─ cytoscape/                  the ONLY place Cytoscape is imported
-├── state/       useGraphInteraction — selection + mirrored viewport
+├── state/       useGraphInteraction — selection (multi) + hover + mirrored viewport
+│                useGraphEditing     — the connect workflow
 ├── components/  GraphCanvas · ViewportControls · Inspector · Legend · SourcePicker
+│                ContextMenu · ConnectBanner
 └── pages/       GraphExplorerPage — composition only
+
+**The Graph Engine's responsibilities (as-built, M9).** The `GraphRenderer`
+contract is the whole public surface of the drawing library, expressed entirely
+in the subsystem's own types. It owns exactly four things:
+
+| Responsibility | Why it belongs to the renderer |
+|---|---|
+| Drawing the model | It is the thing with a canvas |
+| The camera | Pan/zoom is animated and pointer-driven; React as its source of truth would stutter every drag |
+| Reporting user intent | Events *out* — selection, hover, activation, context-menu, background tap |
+| Painting an appearance it is **handed** | `setEditingVisual` takes an origin, legal destinations, and an optional preview; it decides none of them |
+
+What it emphatically does **not** own: what a relationship is, which pairings are
+legal, what happens on confirm, or which entity a node represents. Those live in
+`shared/domain/relationships.ts`, `services/connect-rules.ts`, and
+`state/useGraphEditing.ts` respectively — none of which import the engine.
+
+That is the test for anything added later: *if the drawing library were replaced,
+would this move with it?* Camera easing would; "a Location cannot connect to a
+Faction" would not.
+
+### 6e. The graph editing workflow (as-built, M9)
+
 ```
+right-click node ──→ GraphContextMenu ──→ "Create relationship"
+toolbar "Connect" ─────────────────────┤
+inspector "Connect to…" ───────────────┘
+                                       ▼
+                      useGraphEditing.beginConnect(nodeId)
+                                       │
+              connect-rules.validConnectionTargets(model, source)
+                                       │
+                ┌──────────────────────┴──────────────────────┐
+                ▼                                              ▼
+   renderer.setEditingVisual(…)                     GraphConnectBanner
+   origin ringed · valid lit · rest dimmed          "Mira → Greyfen" · Esc to cancel
+   dashed preview edge follows hover
+                │
+   click a valid node ──→ connect-rules.resolveConnection(from, to)
+                │
+                ▼
+   RelationshipDialog endpoints={{ source, target }}      ← SHARED, unchanged
+                │
+   useCreateRelationship ──→ invalidateAfterRelationship
+                │
+   refetch ──→ setModel ──→ edge-only patch (no relayout, no camera move)
+```
+
+**Three entry points, one handler.** The dialog, its validation, the mutation,
+the toast, and the cache invalidation are the same code the entity detail screens
+use. The graph contributes the gesture and the feedback and nothing else — which
+is the property that stops it becoming a second application.
+
+**Integration boundaries, stated plainly.** The graph reaches the rest of the app
+through exactly three things: `shared/domain/*` (entity identity, relationship
+rules), `shared/relationships` (the dialog and its mutation), and *routes* (a
+node opens or edits its entity by navigating). It imports no entity slice, so the
+four CRUD stacks stay out of its lazy chunk.
 
 **The engine boundary.** `GraphRenderer` is expressed entirely in the subsystem's
 own types; `import … from "cytoscape"` appears in exactly three files, all under

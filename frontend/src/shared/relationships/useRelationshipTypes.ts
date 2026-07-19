@@ -25,10 +25,9 @@
 import { useMemo } from "react"
 
 import {
-  RELATIONSHIP_TYPE_DEFINITIONS,
-  type RelationshipAnchor,
+  type RelationshipEndpoints,
   type RelationshipTypeDefinition,
-  relationshipTypesForAnchor,
+  relationshipTypesForEndpoints,
 } from "@/shared/domain/relationships"
 
 export interface RelationshipTypesResult {
@@ -38,18 +37,15 @@ export interface RelationshipTypesResult {
 }
 
 /**
- * The relationship types available, optionally narrowed to those that make
- * sense for the entity a dialog was opened from.
+ * The relationship types available, narrowed to those that fit the endpoints
+ * already decided.
  *
- * @param anchor When the pinned entity is a relationship's *target* (anything
- *   but a Character), only the types that point at its kind are offered — see
- *   `relationshipTypesForAnchor`.
+ * @param endpoints A fixed *target* constrains the list to the types that point
+ *   at its kind — see `relationshipTypesForEndpoints`. A fixed source does not
+ *   constrain anything, because the type is what decides the target's kind.
  */
-export function useRelationshipTypes(anchor?: RelationshipAnchor): RelationshipTypesResult {
-  const types = useMemo(
-    () => (anchor ? relationshipTypesForAnchor(anchor) : RELATIONSHIP_TYPE_DEFINITIONS),
-    [anchor],
-  )
+export function useRelationshipTypes(endpoints?: RelationshipEndpoints): RelationshipTypesResult {
+  const types = useMemo(() => relationshipTypesForEndpoints(endpoints), [endpoints])
 
   return { types, isPending: false, error: null }
 }

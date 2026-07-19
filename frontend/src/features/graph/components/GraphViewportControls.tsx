@@ -1,7 +1,7 @@
-import { FocusIcon, MaximizeIcon, ZoomInIcon, ZoomOutIcon } from "lucide-react"
+import { FocusIcon, MaximizeIcon, ScanIcon, ZoomInIcon, ZoomOutIcon } from "lucide-react"
 
 import type { GraphRenderer } from "@/features/graph/engine"
-import type { GraphViewport } from "@/features/graph/model/graph.types"
+import type { GraphElementRef, GraphViewport } from "@/features/graph/model/graph.types"
 import { Button } from "@/shared/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip"
 
@@ -19,15 +19,19 @@ const ZOOM_STEP = 1.3
 interface GraphViewportControlsProps {
   renderer: GraphRenderer | null
   viewport: GraphViewport
+  /** Drives "fit selection"; framing nothing would be a zoom to the origin. */
+  selectedRefs: readonly GraphElementRef[]
   disabled?: boolean
 }
 
 export function GraphViewportControls({
   renderer,
   viewport,
+  selectedRefs,
   disabled = false,
 }: GraphViewportControlsProps) {
   const isDisabled = disabled || renderer === null
+  const hasSelection = selectedRefs.length > 0
 
   return (
     <div className="flex items-center gap-1">
@@ -56,6 +60,17 @@ export function GraphViewportControls({
         disabled={isDisabled}
         onClick={() => renderer?.fit()}
       />
+
+      {/* Framing a subset is only meaningful with one, so the control appears
+          with the selection rather than sitting permanently disabled. */}
+      {hasSelection ? (
+        <ControlButton
+          label="Fit selection"
+          icon={<ScanIcon aria-hidden />}
+          disabled={isDisabled}
+          onClick={() => renderer?.fitTo(selectedRefs)}
+        />
+      ) : null}
 
       <ControlButton
         label="Reset viewport"

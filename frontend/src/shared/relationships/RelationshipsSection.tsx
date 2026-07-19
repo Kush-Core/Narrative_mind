@@ -1,10 +1,10 @@
 import { PlusIcon, WaypointsIcon } from "lucide-react"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { paths } from "@/routes/paths"
 import type { EntityKind } from "@/shared/domain/entity-kinds"
-import { relationshipAnchor } from "@/shared/domain/relationships"
+import { endpointsForEntity, relationshipRoleFor } from "@/shared/domain/relationships"
 import { RelationshipDialog } from "@/shared/relationships/RelationshipDialog"
 import { Button } from "@/shared/ui/button"
 import { SectionLabel } from "@/shared/ui/composite/SectionLabel"
@@ -42,7 +42,9 @@ interface RelationshipsSectionProps {
 
 export function RelationshipsSection({ kind, id, name }: RelationshipsSectionProps) {
   const [isOpen, setOpen] = useState(false)
-  const anchor = relationshipAnchor(kind, id, name)
+  // Which end this entity occupies is forced by the backend, not chosen here.
+  const role = relationshipRoleFor(kind)
+  const endpoints = useMemo(() => endpointsForEntity(kind, id, name), [kind, id, name])
 
   return (
     <section className="flex flex-col gap-3 border-t pt-6">
@@ -55,7 +57,7 @@ export function RelationshipsSection({ kind, id, name }: RelationshipsSectionPro
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {anchor.role === "source"
+        {role === "source"
           ? "Connect this character to the people, places, factions, and events they belong to."
           : `Record which characters connect to this ${kind.toLowerCase()}.`}
       </p>
@@ -64,13 +66,13 @@ export function RelationshipsSection({ kind, id, name }: RelationshipsSectionPro
           this links to the graph itself from a non-character entity rather than
           to a view that cannot be centred on it. */}
       <Button asChild variant="link" size="sm" className="h-auto self-start p-0 text-xs">
-        <Link to={anchor.role === "source" ? paths.graph.forCharacter(id) : paths.graph.explorer()}>
+        <Link to={role === "source" ? paths.graph.forCharacter(id) : paths.graph.explorer()}>
           <WaypointsIcon aria-hidden />
-          {anchor.role === "source" ? "View in graph" : "Open the graph explorer"}
+          {role === "source" ? "View in graph" : "Open the graph explorer"}
         </Link>
       </Button>
 
-      <RelationshipDialog open={isOpen} onOpenChange={setOpen} anchor={anchor} />
+      <RelationshipDialog open={isOpen} onOpenChange={setOpen} endpoints={endpoints} />
     </section>
   )
 }

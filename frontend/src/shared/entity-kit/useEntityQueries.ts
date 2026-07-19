@@ -45,10 +45,22 @@ export function useEntityQuery<
   TRead extends Identifiable,
   TForm extends FieldValues,
   TListParams extends BaseListParams,
->(descriptor: EntityDescriptor<TRead, TForm, TListParams>, id: string | undefined) {
+>(
+  descriptor: EntityDescriptor<TRead, TForm, TListParams>,
+  id: string | undefined,
+  /**
+   * `enabled` lets a second caller share this query's cache entry without
+   * forcing a fetch it does not need — `EntityDetailPage` reads the entity only
+   * when an edit link asked it to, and rides the detail view's cached copy the
+   * rest of the time.
+   */
+  options: { enabled?: boolean } = {},
+) {
+  const hasId = id !== undefined && id !== ""
+
   return useQuery<TRead>({
     queryKey: descriptor.keys.detail(id ?? ""),
     queryFn: ({ signal }) => descriptor.resource.get(id ?? "", { signal }),
-    enabled: id !== undefined && id !== "",
+    enabled: hasId && (options.enabled ?? true),
   })
 }

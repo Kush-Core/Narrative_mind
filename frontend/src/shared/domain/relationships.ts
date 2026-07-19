@@ -112,52 +112,109 @@ export function isRelationshipType(value: string): value is RelationshipType {
   return (RELATIONSHIP_TYPES as readonly string[]).includes(value)
 }
 
-/* ------------------------------------------------------------------ anchors */
+/* ---------------------------------------------------------------- endpoints */
 
 /**
- * The entity a relationship dialog was opened from, and which end of the
- * relationship it therefore occupies.
+ * One end of a relationship, already identified.
  *
- * This is the crux of making one dialog serve all four detail screens. Because
- * the backend requires a Character source (fact 1 above), "the entity you opened
+ * Carries the name as well as the id because every surface that pins an end also
+ * has to *show* it, and re-fetching a label the caller was just handed would be
+ * a request for a word.
+ */
+export interface RelationshipEndpoint {
+  id: string
+  name: string
+  kind: EntityKind
+}
+
+/**
+ * Which ends of a relationship are already decided.
+ *
+ * This is the crux of letting one dialog serve every surface. Because the
+ * backend requires a Character source (fact 1 above), "the entity you started
  * from" cannot always be the source:
  *
  *  - From a **Character**, it is the source, and the writer picks the target.
  *  - From a **Location, Faction, or Event**, it can only be the *target*, and
  *    the writer picks which character connects to it.
+ *  - From the **graph**, connecting two nodes decides *both* — and which is
+ *    which is likewise forced by the same rule.
  *
- * Encoding that here rather than in the dialog means the rule is stated once,
- * next to the backend fact that forces it.
+ * Modelling it as "the fixed ends" rather than as "the anchor and its role"
+ * covers all three without the dialog knowing which surface opened it.
  */
-export type RelationshipRole = "source" | "target"
-
-export interface RelationshipAnchor {
-  role: RelationshipRole
-  id: string
-  name: string
-  kind: EntityKind
+export interface RelationshipEndpoints {
+  source?: RelationshipEndpoint
+  target?: RelationshipEndpoint
 }
+
+export type RelationshipRole = "source" | "target"
 
 /** Which end of a relationship an entity of this kind is able to occupy. */
 export function relationshipRoleFor(kind: EntityKind): RelationshipRole {
   return kind === "Character" ? "source" : "target"
 }
 
-export function relationshipAnchor(kind: EntityKind, id: string, name: string): RelationshipAnchor {
-  return { role: relationshipRoleFor(kind), id, name, kind }
+/** The endpoints implied by opening a relationship flow *from* one entity. */
+export function endpointsForEntity(
+  kind: EntityKind,
+  id: string,
+  name: string,
+): RelationshipEndpoints {
+  const endpoint: RelationshipEndpoint = { id, name, kind }
+  return relationshipRoleFor(kind) === "source" ? { source: endpoint } : { target: endpoint }
 }
 
 /**
- * The relationship types offered for a given anchor.
+ * Whether a relationship between these two kinds is expressible at all.
  *
- * A Character source can use any type. A pinned *target* can only use the types
- * that conventionally point at its kind — from a Faction page the only sensible
- * relationship is `MEMBER_OF`, so offering the other three would be offering
- * three ways to write something meaningless.
+ * At least one end must be a Character, because the write endpoint is a
+ * sub-resource of one. A Location-to-Faction edge is not "unsupported by the
+ * UI" — there is no request that would create it.
+ *
+ * This is what the graph's connect mode uses to mark valid and invalid
+ * destinations, so the affordance and the backend agree by construction.
  */
-export function relationshipTypesForAnchor(
-  anchor: RelationshipAnchor | undefined,
+export function canRelate(a: EntityKind, b: EntityKind): boolean {
+  return a === "Character" || b === "Character"
+}
+
+export type RelationshipResolution =
+  { ok: true; endpoints: Required<RelationshipEndpoints> } | { ok: false; reason: string }
+
+/**
+ * Decide which of two chosen entities is the source and which is the target.
+ *
+ * Used when *both* ends are picked before a type is — the graph's connect flow.
+ * The Character becomes the source because nothing else can be; when both are
+ * Characters the one the user started from wins, which keeps the direction
+ * matching the gesture (`from` knows `to`, not the reverse).
+ */
+export function resolveRelationshipEndpoints(
+  from: RelationshipEndpoint,
+  to: RelationshipEndpoint,
+): RelationshipResolution {
+  if (from.kind === "Character") return { ok: true, endpoints: { source: from, target: to } }
+  if (to.kind === "Character") return { ok: true, endpoints: { source: to, target: from } }
+
+  return {
+    ok: false,
+    reason: `A relationship must involve a character. ${from.name} and ${to.name} cannot be connected directly.`,
+  }
+}
+
+/**
+ * The relationship types offered for a set of fixed endpoints.
+ *
+ * A known target narrows the list to the types that point at its kind — from a
+ * Faction the only sensible relationship is `MEMBER_OF`, so offering the other
+ * three would be offering three ways to write something meaningless. An unknown
+ * target constrains nothing, because the type is what will decide its kind.
+ */
+export function relationshipTypesForEndpoints(
+  endpoints: RelationshipEndpoints | undefined,
 ): RelationshipTypeDefinition[] {
-  if (!anchor || anchor.role === "source") return RELATIONSHIP_TYPE_DEFINITIONS
-  return RELATIONSHIP_TYPE_DEFINITIONS.filter((definition) => definition.targetKind === anchor.kind)
+  const targetKind = endpoints?.target?.kind
+  if (!targetKind) return RELATIONSHIP_TYPE_DEFINITIONS
+  return RELATIONSHIP_TYPE_DEFINITIONS.filter((definition) => definition.targetKind === targetKind)
 }
