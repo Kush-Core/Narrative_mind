@@ -77,7 +77,6 @@ export const navSections: NavSection[] = [
         icon: MapPinIcon,
         accentClassName: "text-entity-location",
         shortcut: "g l",
-        pending: true,
       },
       {
         id: "factions",

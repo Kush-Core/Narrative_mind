@@ -52,7 +52,16 @@ export function EntityListView<
   TListParams extends BaseListParams,
 >({ descriptor, onCreate }: EntityListViewProps<TRead, TForm, TListParams>) {
   const navigate = useNavigate()
-  const { params, setParams, reset, isFiltered } = useUrlListState(descriptor.listParamsSchema)
+
+  // The descriptor is the only thing that knows this entity's filter param, so
+  // it is the descriptor that tells the URL hook — rather than the hook holding
+  // a list of every entity's filter names.
+  const filter = descriptor.filter
+  const filterKeys = useMemo(() => (filter ? [filter.name] : []), [filter])
+
+  const { params, setParams, reset, isFiltered } = useUrlListState(descriptor.listParamsSchema, {
+    filterKeys,
+  })
   const query = useEntityListQuery(descriptor, params)
 
   const columns = useMemo<ColumnDef<TRead>[]>(
@@ -66,9 +75,14 @@ export function EntityListView<
   )
 
   const page = query.data
-  const filterValue = descriptor.filter
-    ? ((params as Record<string, unknown>)[descriptor.filter.name] as string | undefined)
+  const filterValue = filter
+    ? ((params as Record<string, unknown>)[filter.name] as string | undefined)
     : undefined
+
+  function handleFilterChange(value: string | undefined) {
+    if (!filter) return
+    setParams({ [filter.name]: value === "" ? undefined : value })
+  }
 
   /** Clicking the active sort column flips direction; a new column starts ascending. */
   function handleSortChange(columnId: string) {
@@ -101,27 +115,36 @@ export function EntityListView<
               className="w-64"
             />
 
-            {descriptor.filter ? (
+            {/* Closed value sets get a select; open-ended ones get a debounced
+                input. The engine switches on the descriptor's declared `kind`,
+                never on which entity it is rendering. */}
+            {filter?.kind === "select" ? (
               <Select
                 value={filterValue ?? ALL_FILTER_VALUE}
                 onValueChange={(value) =>
-                  setParams({
-                    [descriptor.filter!.name]: value === ALL_FILTER_VALUE ? undefined : value,
-                  })
+                  handleFilterChange(value === ALL_FILTER_VALUE ? undefined : value)
                 }
               >
-                <SelectTrigger size="sm" className="w-36" aria-label={descriptor.filter.label}>
+                <SelectTrigger size="sm" className="w-36" aria-label={filter.label}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_FILTER_VALUE}>{descriptor.filter.allLabel}</SelectItem>
-                  {descriptor.filter.options.map((option) => (
+                  <SelectItem value={ALL_FILTER_VALUE}>{filter.allLabel}</SelectItem>
+                  {filter.options.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            ) : filter?.kind === "text" ? (
+              <SearchInput
+                value={filterValue ?? ""}
+                onValueChange={handleFilterChange}
+                placeholder={filter.placeholder ?? filter.label}
+                label={filter.label}
+                className="w-48"
+              />
             ) : null}
 
             {descriptor.slots?.listToolbar?.()}

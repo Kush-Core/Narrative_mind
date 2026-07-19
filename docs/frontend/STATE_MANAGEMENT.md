@@ -107,6 +107,15 @@ identical logical queries share one cache entry.
   can't reach the query). Handled by a `useUrlListState` hook that parses+validates
   params with Zod and clamps to the backend's bounds (`limit 1..100`, `offset ≥0`),
   so the client never issues a request the backend would reject.
+
+> **As-built (M4):** `useUrlListState` takes its entity-specific filter names as
+> an argument (`{ filterKeys }`) rather than knowing them. It ships with only the
+> params *every* collection shares (`nameContains`, `sortBy`, `order`); the caller
+> — `EntityListView` — supplies the rest from its descriptor. Those keys define
+> two behaviours: changing one returns to page 1, and its presence in the URL means
+> "filtered". Originally the hook hardcoded `status`/`region`/`ideology`, which put
+> per-entity knowledge in a shared hook and would have needed an edit for every new
+> entity. It is now a pure function of what the caller declares.
 - **Future scalability:** a `worldId` path segment slots in ahead of these params
   with no change to the parsing hook's shape.
 

@@ -147,6 +147,25 @@ an entity, never a specific one.
 >   resolves a field's value through the same `options` the form offers, so a
 >   reader sees "Alive" rather than `alive` and the two surfaces cannot disagree.
 
+> **As-built (M4) — filters are a discriminated union.** `EntityFilterSpec` gained
+> a `kind`:
+>
+> - `kind: "select"` — a **closed** value set, rendered as a select with an "all"
+>   choice. Character's `status` (a three-member enum).
+> - `kind: "text"` — an **open-ended** value, rendered as a debounced `SearchInput`.
+>   Location's `region` (and later Faction's `ideology`): the backend types these
+>   as `str | None` and matches them by **equality**, and exposes no endpoint that
+>   enumerates their values, so a select is not expressible.
+>
+> This is the first real gap M3 predicted Locations would find. It was closed by
+> **extending the descriptor contract**, exactly as M4's risk plan required — the
+> engine switches on a declared `kind`, never on which entity it is rendering, so
+> `entity-kit/` still contains no per-entity conditional.
+>
+> Exact-match on free text remains a genuine UX limitation (typing "North" does not
+> match "Northern Reach"). `name_contains` stays the primary search, and a
+> distinct-values or substring `region` filter is a noted backend enhancement.
+
 **The `EntityDescriptor` is the contract.** It declares, per entity: identity
 (name, route base, endpoint path), Zod schemas + wire mappers, field specs (label,
 control type, constraints, read-only-ness — e.g. `display_name` read-only),
@@ -158,7 +177,8 @@ entity-specific UI.
   - Character → a `relationships` slot renders `CharacterRelationshipEditor`.
   - Event → `timeline_order` is just another descriptor field + a sortable column.
   - Faction/Location → their categorical filter (`ideology`/`region`) is descriptor
-    data.
+    data — declared `kind: "text"`, since both are open-ended strings (see the
+    M4 note above).
   This keeps EntityListView/Form free of `if (entity === 'character')`.
 
 ---
@@ -173,6 +193,7 @@ plugs into the generic slots.
 | **CharacterRelationshipEditor** | characters | List/create relationships for a character: pick `rel_type` (the 4 allowed values), choose a target via `EntityPicker`, add `sentiment` **only** when `KNOWS`; guides valid target types per rel while tolerating the backend's permissiveness |
 | **CharacterStatusBadge** | characters | Renders `alive/dead/unknown` with a semantic token |
 | **AliasList** | characters | Displays/edits the deduped alias set (≤10) |
+| **RegionBadge** | locations | Renders a region, or a quiet "Unassigned" — a region-less place is an unfinished state, not missing data |
 | **EventTimelineField** | events | Specialized control for `timeline_order` |
 | **GraphExplorer** | graph | Container: fetches ego-network, drives the renderer, depth control (`1..3`) |
 | **ShortestPathFinder** | graph | Two entity pickers → shortest-path result (hops + distance) |

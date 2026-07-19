@@ -95,15 +95,39 @@ export interface EntityMetaSpec<TRead> {
   value: (entity: TRead) => ReactNode
 }
 
-/** The categorical filter a collection supports, if any. */
-export interface EntityFilterSpec {
+interface EntityFilterBase {
   /** URL/query param name — wire-identical (`status`, `region`, `ideology`). */
   name: string
   label: string
+}
+
+/**
+ * A filter over a **closed** set of values, rendered as a select.
+ * Character's `status` is the case: three enum members, known ahead of time.
+ */
+export interface EntitySelectFilterSpec extends EntityFilterBase {
+  kind: "select"
   options: readonly SelectOption[]
   /** Label for the "no filter" choice. */
   allLabel: string
 }
+
+/**
+ * A filter over an **open-ended** value, rendered as a debounced text input.
+ *
+ * Location's `region` is the case: the backend types it as `str | None` and
+ * matches it by equality (`l.region = $region`), so its value set is whatever
+ * the writer has typed across the world. There is no endpoint that enumerates
+ * it, so a select is not expressible — which is precisely why the filter spec
+ * is a discriminated union rather than an options list.
+ */
+export interface EntityTextFilterSpec extends EntityFilterBase {
+  kind: "text"
+  placeholder?: string
+}
+
+/** The categorical filter a collection supports, if any. */
+export type EntityFilterSpec = EntitySelectFilterSpec | EntityTextFilterSpec
 
 /**
  * Entity-specific UI injected into the generic screens. These are the escape

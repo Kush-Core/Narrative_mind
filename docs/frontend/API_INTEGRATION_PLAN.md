@@ -152,6 +152,11 @@ Each is a fact from the analysis, with the required handling:
    are exact string equality with no way to enumerate values server-side; the UI
    treats them as exact-match inputs (with values discovered from loaded data as an
    aid), and positions `name_contains` as the primary discovery filter.
+   *As-built (M4):* this is the `EntityFilterSpec` `kind` discriminator —
+   `status` is `kind: "select"`, `region` is `kind: "text"` (a debounced input).
+   Suggesting values from loaded data was **not** built: the only values available
+   client-side are those on the current page, which is circular once a filter is
+   applied. It needs a distinct-values endpoint to be worth doing.
 9. **Relationships are Character-rooted** (`POST /characters/{id}/relationships`),
    `rel_type ∈ {KNOWS, MEMBER_OF, LOCATED_IN, PARTICIPATED_IN}`, `sentiment`
    meaningful only for `KNOWS`, and the backend does **not** enforce target type

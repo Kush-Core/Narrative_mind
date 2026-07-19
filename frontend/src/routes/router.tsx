@@ -27,9 +27,8 @@ import { RoutePlaceholder } from "@/routes/route-placeholder"
  * throws, the same element renders standalone at the root.
  */
 
-/** Destinations whose slices are still to come (M4+). */
+/** Destinations whose slices are still to come (M5+). */
 const placeholderPaths = [
-  paths.locations.list(),
   paths.factions.list(),
   paths.events.list(),
   paths.graph.explorer(),
@@ -59,6 +58,21 @@ export const router = createBrowserRouter([
             lazy: async () => {
               const { CharacterDetailPage } = await import("@/features/characters")
               return { Component: CharacterDetailPage }
+            },
+          },
+
+          {
+            path: paths.locations.list(),
+            lazy: async () => {
+              const { LocationListPage } = await import("@/features/locations")
+              return { Component: LocationListPage }
+            },
+          },
+          {
+            path: paths.locations.detail(":locationId"),
+            lazy: async () => {
+              const { LocationDetailPage } = await import("@/features/locations")
+              return { Component: LocationDetailPage }
             },
           },
 

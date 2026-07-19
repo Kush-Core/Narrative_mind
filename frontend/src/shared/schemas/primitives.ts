@@ -35,8 +35,20 @@ export const EntityNameSchema = z
   .min(1, "Name is required")
   .max(120, "Name must be 120 characters or fewer")
 
+/**
+ * Optional free text with a backend-declared upper bound.
+ *
+ * The backend's optional string fields differ only in that bound — `region`
+ * ≤120, `ideology` ≤500, `description`/`summary` ≤2000 (analysis §DTOs) — so the
+ * shape is written once and the bound is the parameter. Trimming matches
+ * `str_strip_whitespace` on every entity's `model_config`.
+ */
+export function boundedTextSchema(max: number) {
+  return z.string().trim().max(max, `Must be ${max} characters or fewer`)
+}
+
 /** Mirrors the backend's shared `description`/`summary` bound (≤2000). */
-export const LongTextSchema = z.string().trim().max(2000, "Must be 2000 characters or fewer")
+export const LongTextSchema = boundedTextSchema(2000)
 
 /** `SortOrder` (analysis §DTOs — `common.py`). */
 export const SortOrderSchema = z.enum(["asc", "desc"])

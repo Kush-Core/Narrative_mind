@@ -214,6 +214,34 @@ is independently reviewable and leaves the app in a working state.
   primary search; note as a backend enhancement candidate.
 - **Commit scope:** ~3–5 (one per entity + engine touch-ups).
 
+> **M4 as-built notes — Locations (2026-07-19).** Factions and Events still to come.
+>
+> - **The engine held.** Locations needed **no** new list, detail, form, dialog,
+>   pagination, search, or mutation code. The slice is a schema, a resource module
+>   (8 lines of configuration), a descriptor, two ~30-line pages, and one badge
+>   component. The lazy chunk is 3.9 kB against Character's 5.4 kB.
+> - **The gap M3 predicted was real, and it was the filter.** `EntityFilterSpec`
+>   assumed every categorical filter is a closed enum, because `status` — its only
+>   consumer — is one. `region` is free text the backend matches by equality. Fixed
+>   by making the spec a discriminated union on `kind` (`"select" | "text"`), not by
+>   branching the engine (see COMPONENT_HIERARCHY.md §5).
+> - **A second leak, found while fixing the first:** `useUrlListState` hardcoded
+>   `status`/`region`/`ideology` in its paging-reset set — per-entity knowledge in a
+>   shared hook, the same smell the entity engine forbids. Filter keys are now
+>   passed in from the descriptor (see STATE_MANAGEMENT.md §URL state).
+> - **Both fixes were additive.** Character's descriptor gained one line
+>   (`kind: "select"`); no public interface broke.
+> - **`boundedTextSchema(max)` extracted** in `shared/schemas/primitives.ts`. The
+>   backend's optional text fields differ only in their bound (`region` ≤120,
+>   `ideology` ≤500, `description` ≤2000), so `LongTextSchema` became one call of it
+>   — and Faction's `ideology` is already served.
+> - **No `detail` slot needed.** Character used one for `AliasList`; Location has no
+>   equivalent, confirming slots are genuinely optional rather than load-bearing.
+> - **Verified against the live stack** (FastAPI + Neo4j, not mocks): create, read,
+>   search, region filter, sort, two-page pagination, partial update, clearing a
+>   field with `""`, delete, and the subsequent 404 — plus 28 new mocked
+>   unit/integration tests (140 total).
+
 ---
 
 ## M5 — Relationships (Character-rooted graph writes)

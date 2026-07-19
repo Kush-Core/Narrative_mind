@@ -16,15 +16,28 @@ import { useCallback, useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import type { z } from "zod"
 
-/** Params that reset paging when they change — a new filter means a new page 1. */
-const PAGING_RESET_KEYS = new Set([
-  "nameContains",
-  "sortBy",
-  "order",
-  "status",
-  "region",
-  "ideology",
-])
+/**
+ * Params every collection shares that reset paging when they change — a new
+ * filter means a new page 1.
+ *
+ * Entity-specific filter names (`status`, `region`, `ideology`) are **not**
+ * listed here. They arrive via `options.filterKeys`, supplied by the caller from
+ * its descriptor, because a shared hook that enumerates per-entity params is the
+ * same leak the entity engine forbids: adding a fifth entity would mean editing
+ * this file. It is now a pure function of what the caller declares.
+ */
+const BASE_RESET_KEYS = ["nameContains", "sortBy", "order"] as const
+
+/** Module-level so the default is referentially stable across renders. */
+const NO_FILTER_KEYS: readonly string[] = []
+
+export interface UrlListStateOptions {
+  /**
+   * Additional param names that behave as filters: changing one returns to page
+   * one, and its presence counts as "filtered".
+   */
+  filterKeys?: readonly string[]
+}
 
 export interface UrlListState<TParams> {
   /** Validated, defaulted params — safe to hand straight to a query. */
@@ -39,8 +52,15 @@ export interface UrlListState<TParams> {
 
 export function useUrlListState<TSchema extends z.ZodType>(
   schema: TSchema,
+  options: UrlListStateOptions = {},
 ): UrlListState<z.infer<TSchema>> {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { filterKeys = NO_FILTER_KEYS } = options
+
+  const resetKeys = useMemo(
+    () => new Set<string>([...BASE_RESET_KEYS, ...filterKeys]),
+    [filterKeys],
+  )
 
   const params = useMemo(() => {
     const raw = Object.fromEntries(searchParams.entries())
@@ -65,7 +85,7 @@ export function useUrlListState<TSchema extends z.ZodType>(
           // otherwise a filter applied from page 5 shows an empty result.
           const changedKeys = Object.keys(next)
           const changesPaging = changedKeys.some((key) => key === "offset" || key === "limit")
-          if (!changesPaging && changedKeys.some((key) => PAGING_RESET_KEYS.has(key))) {
+          if (!changesPaging && changedKeys.some((key) => resetKeys.has(key))) {
             updated.delete("offset")
           }
 
@@ -74,7 +94,7 @@ export function useUrlListState<TSchema extends z.ZodType>(
         { replace: true },
       )
     },
-    [setSearchParams],
+    [setSearchParams, resetKeys],
   )
 
   const reset = useCallback(() => {
@@ -82,8 +102,8 @@ export function useUrlListState<TSchema extends z.ZodType>(
   }, [setSearchParams])
 
   const isFiltered = useMemo(
-    () => [...searchParams.keys()].some((key) => PAGING_RESET_KEYS.has(key)),
-    [searchParams],
+    () => [...searchParams.keys()].some((key) => resetKeys.has(key)),
+    [searchParams, resetKeys],
   )
 
   return { params, setParams, reset, isFiltered }

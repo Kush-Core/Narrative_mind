@@ -150,6 +150,8 @@ export const characterDescriptor: EntityDescriptor<Character, CharacterForm, Cha
     sortableFields: CHARACTER_SORT_FIELDS,
 
     filter: {
+      // A closed enum, so the writer picks from a list rather than typing.
+      kind: "select",
       name: "status",
       label: "Filter by status",
       options: CHARACTER_STATUS_OPTIONS,
