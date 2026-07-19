@@ -60,6 +60,32 @@ describe("pickDefined", () => {
     expect(pickDefined<Characterish>(patch, ["name"])).toEqual({ name: "Aria" })
   })
 
+  it("converts a multi-word field name to the backend's snake_case", () => {
+    // Event's `timelineOrder` → `timeline_order`. Sending the camelCase key
+    // would not match a backend field, so `exclude_none` would drop it and the
+    // update would silently succeed while changing nothing.
+    type EventForm = { name: string; timelineOrder: number }
+
+    expect(pickDefined<EventForm>({ timelineOrder: 7 }, ["timelineOrder"])).toEqual({
+      timeline_order: 7,
+    })
+  })
+
+  it("leaves single-word names untouched, so the first three entities are unaffected", () => {
+    expect(pickDefined<TestForm>({ name: "Dunhollow", region: "Reach" }, fields)).toEqual({
+      name: "Dunhollow",
+      region: "Reach",
+    })
+  })
+
+  it("preserves a zero, which is a real value and not an absent one", () => {
+    type EventForm = { timelineOrder: number }
+
+    expect(pickDefined<EventForm>({ timelineOrder: 0 }, ["timelineOrder"])).toEqual({
+      timeline_order: 0,
+    })
+  })
+
   it("returns an empty object when nothing is writable, leaving the caller to skip", () => {
     // `diffForUpdate` is what decides whether a request happens at all; the
     // resource layer refuses an empty body rather than sending a 422.

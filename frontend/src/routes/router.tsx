@@ -54,8 +54,8 @@ function entityRoutes(
   ]
 }
 
-/** Destinations whose slices are still to come (M5+). */
-const placeholderPaths = [paths.events.list(), paths.graph.explorer(), paths.graph.shortestPath()]
+/** Destinations whose slices are still to come (M6+). */
+const placeholderPaths = [paths.graph.explorer(), paths.graph.shortestPath()]
 
 export const router = createBrowserRouter([
   {
@@ -81,6 +81,11 @@ export const router = createBrowserRouter([
           ...entityRoutes(paths.factions, async () => {
             const slice = await import("@/features/factions")
             return { list: slice.FactionListPage, detail: slice.FactionDetailPage }
+          }),
+
+          ...entityRoutes(paths.events, async () => {
+            const slice = await import("@/features/events")
+            return { list: slice.EventListPage, detail: slice.EventDetailPage }
           }),
 
           ...placeholderPaths.map((path) => ({ path, element: <RoutePlaceholder /> })),

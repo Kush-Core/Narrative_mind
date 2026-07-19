@@ -54,7 +54,13 @@ export type ListParamsInput = z.input<typeof BaseListParamsSchema>
  */
 export function listParamsSchema<
   const TSortFields extends readonly [string, ...string[]],
-  TFilters extends z.ZodRawShape = Record<string, never>,
+  // `Record<never, never>` — an empty shape — rather than `Record<string, never>`.
+  // The latter carries a *string index signature*, and spreading it into
+  // `.extend()` propagates that signature to the result: every param type
+  // collapses to `never`, so the whole schema infers as `Record<string, never>`.
+  // It went unnoticed while all three entities passed a filter shape; Event is
+  // the first with no categorical filter and so the first to take this default.
+  TFilters extends z.ZodRawShape = Record<never, never>,
 >(sortableFields: TSortFields, filters?: TFilters) {
   const defaultSort = sortableFields[0]
 

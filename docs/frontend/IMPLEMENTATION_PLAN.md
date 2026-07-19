@@ -289,6 +289,57 @@ is independently reviewable and leaves the app in a working state.
 > Location still dedupe aliases, map nulls, clear with `""`, and never echo
 > `display_name`. 40 new mocked tests (180 total).
 
+> **M4 as-built notes — Events (2026-07-19). M4 complete: all four entities shipped.**
+>
+> Event was expected to be the smallest slice. It was the smallest *feature* but
+> the most informative, because it is the first entity that does not fit the
+> shape the other three share, and it surfaced **three latent defects** in
+> abstractions that had looked settled.
+>
+> **Where Event differs from Character / Location / Faction:**
+>
+> - `timeline_order` is the first **numeric** field, and the first that is
+>   *required with a default* rather than optional-and-nullable. It does not go
+>   through `emptyToNull` — zero is a real position, not "unset".
+> - It is the first field whose **wire name differs from its app name**.
+> - Event is the only entity with **no categorical filter**; the descriptor omits
+>   `filter` and `EntityListView` renders search alone, with no engine change.
+> - Its default sort is `timeline_order`, not `name` — chronological order is how
+>   a timeline is read. `listParamsSchema` already took the default from the first
+>   sortable field, so this was declaration, not code.
+>
+> **Three defects found, all pre-existing and all invisible until Event:**
+>
+> 1. **`pickDefined` assumed form keys equal wire keys.** True for three entities
+>    by coincidence. `timelineOrder` would have been sent verbatim, not matched
+>    any backend field, and been dropped by `exclude_none` — a PATCH returning 200
+>    having changed nothing. Fixed by snake-casing allow-listed keys in the helper
+>    (API_INTEGRATION_PLAN.md §3).
+> 2. **`valueAsNumber` maps an emptied number input to `NaN`.** That fails
+>    validation with an unreadable message, and `NaN !== NaN` means the update
+>    diff would see a change on every save and send a value that serializes to
+>    `null` and is then silently dropped. `EntityForm` now uses `setValueAs` to
+>    map blank to `undefined`, so the schema reports a missing required value.
+> 3. **`listParamsSchema`'s filter default carried a string index signature**
+>    (`Record<string, never>`), which collapsed every inferred param type to
+>    `never` for any entity passing no filters. Event is the only such entity, so
+>    it had never been exercised. Fixed to `Record<never, never>`; a compile-time
+>    guard in `event.schema.test.ts` keeps it fixed, since the bug was invisible
+>    at runtime.
+>
+> **Narrative readiness (prepared, not implemented).** `EntityDetailView` now
+> renders **Details → slot → Record** rather than putting the system record above
+> entity substance. Timeline position is first-class — default sort, leading
+> column, detail subtitle — so a future timeline view reads the same
+> `timelineOrder` and the same `sort_by=timeline_order` query this module already
+> issues. Participants, locations, factions, and AI annotations attach as further
+> sections in the existing slot. Nothing was stubbed for them.
+>
+> **Verified against the live stack:** full Event CRUD, plus the two checks the
+> mocks cannot make — that `sort_by=timeline_order` genuinely orders differently
+> from `sort_by=name`, and that a PATCH of the renamed key **persists on re-read**
+> rather than merely being echoed. 45 new tests (225 total).
+
 ---
 
 ## M5 — Relationships (Character-rooted graph writes)

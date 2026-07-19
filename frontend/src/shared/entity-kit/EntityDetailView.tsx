@@ -123,6 +123,18 @@ export function EntityDetailView<
             </dl>
           </section>
 
+          {/* The escape hatch: entity-specific UI enters here, not through a
+              conditional in this component.
+
+              It sits above `Record` deliberately. This slot carries the entity's
+              *substance* — Character's aliases today, and the narrative surfaces
+              the Event module is shaped for (participants, locations, factions,
+              AI annotations) as they arrive. `Record` is provenance: created-at
+              and identifier, the least-read facts on the screen. Ordering by
+              importance means a future section is added to the slot without
+              anyone having to restructure this component. */}
+          {descriptor.slots?.detail?.(entity)}
+
           {descriptor.meta && descriptor.meta.length > 0 ? (
             <section className="flex flex-col gap-4 border-t pt-6">
               <SectionLabel>Record</SectionLabel>
@@ -136,10 +148,6 @@ export function EntityDetailView<
               </dl>
             </section>
           ) : null}
-
-          {/* The escape hatch: entity-specific UI enters here, not through a
-              conditional in this component. */}
-          {descriptor.slots?.detail?.(entity)}
         </div>
       </div>
     </div>

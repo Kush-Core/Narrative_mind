@@ -176,7 +176,7 @@ features/
 │       └── CharacterDetailPage.tsx
 ├── locations/              (same shape; region filter (text); no relationships)
 ├── factions/               (same shape; ideology filter (text); no relationships)
-├── events/                 (same shape; timeline_order sort; no categorical filter)
+├── events/                 (same shape; timeline_order default sort; no categorical filter)
 ├── graph/                  Relationship/graph reasoning surface
 │   ├── index.ts
 │   ├── api/graph.api.ts     ego-network + shortest-path resource functions

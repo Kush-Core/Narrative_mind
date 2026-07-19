@@ -10,6 +10,7 @@
  * Pure — no React, no fetch, no Zod.
  */
 
+import { camelToSnake } from "@/shared/lib/casing"
 import type { UnknownRecord } from "@/shared/types/utility"
 
 /**
@@ -31,13 +32,28 @@ export function emptyToNull(value: string): string | null {
 
 /**
  * Build a wire update body from a form patch, copying only the fields that are
- * both **defined** and **explicitly writable**.
+ * both **defined** and **explicitly writable**, with each key converted to the
+ * backend's snake_case.
  *
  * The allow-list is the load-bearing part. Server-owned and computed fields
  * (`id`, `created_at`, Character's `display_name`) must never be echoed back on
  * a write, and an allow-list makes that structural rather than something each
  * mapper has to remember to omit. `undefined` means "not in this patch";
  * `""` means "clear this field" and is passed through deliberately.
+ *
+ * **On the casing conversion.** Through Faction every writable field was a
+ * single word (`name`, `status`, `region`, `ideology`), so form keys and wire
+ * keys happened to coincide and this helper could copy them verbatim. Event's
+ * `timelineOrder` → `timeline_order` is the first field where they diverge, and
+ * the silent-failure mode is nasty: an unconverted key is simply not a field the
+ * backend knows, so `exclude_none` drops it and the update reports success while
+ * changing nothing.
+ *
+ * Converting here rather than per-entity is safe *because the whole backend is
+ * uniformly snake_case* (a verified fact, analysis §DTOs), and it fails safe:
+ * every future multi-word field is handled without anyone remembering to. Note
+ * this converts **allow-listed top-level keys only** — never nested payload
+ * data, which is the corruption case `shared/lib/casing.ts` warns about.
  */
 export function pickDefined<TForm extends UnknownRecord>(
   patch: Partial<TForm>,
@@ -46,7 +62,7 @@ export function pickDefined<TForm extends UnknownRecord>(
   const body: UnknownRecord = {}
   for (const field of writableFields) {
     const value = patch[field]
-    if (value !== undefined) body[field] = value
+    if (value !== undefined) body[camelToSnake(field)] = value
   }
   return body
 }

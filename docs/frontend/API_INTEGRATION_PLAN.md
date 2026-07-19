@@ -162,6 +162,21 @@ Each is a fact from the analysis, with the required handling:
 > quietly keeps its old value, or an empty string stored where "not set" was
 > meant. That is why they are one tested module rather than a convention each
 > schema restates.
+>
+> **As-built (M5) — `pickDefined` also converts keys to snake_case.** Through
+> Faction every writable field was a single word, so form keys and wire keys
+> coincided by accident. Event's `timelineOrder` → `timeline_order` is the first
+> divergence, and its failure mode is the worst kind: an unconverted key is not a
+> field the backend knows, so `exclude_none` drops it and the PATCH returns 200
+> having changed nothing. Converting inside the helper is safe because the whole
+> backend is uniformly snake_case, and it fails safe — every future multi-word
+> field is handled without anyone having to remember. Only allow-listed top-level
+> keys are converted, never nested payload data (the corruption case
+> `shared/lib/casing.ts` warns about).
+>
+> Note the create/update asymmetry is deliberate: create mappers still spell out
+> wire keys, because they also apply *value* transforms (`emptyToNull`) that are
+> field-specific. Update maps keys only, so it can be mechanical.
 6. **`created_at` is a plain ISO string**, not a guaranteed typed datetime. The
    schema parses it as an ISO string and formatting is done defensively.
 7. **Sort whitelist differs per entity and invalid sorts silently fall back to

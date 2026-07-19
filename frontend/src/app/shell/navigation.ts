@@ -93,7 +93,6 @@ export const navSections: NavSection[] = [
         icon: CalendarClockIcon,
         accentClassName: "text-entity-event",
         shortcut: "g e",
-        pending: true,
       },
     ],
   },

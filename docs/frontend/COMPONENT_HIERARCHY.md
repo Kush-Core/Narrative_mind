@@ -163,6 +163,21 @@ an entity, never a specific one.
 > the escape hatch stays cheap, which is what stops the builders becoming a
 > straitjacket.
 
+> **As-built (M5) — the detail slot moved above `Record`.** `EntityDetailView`
+> now renders **Details → slot → Record**. The slot carries the entity's
+> *substance* (Character's aliases; the narrative surfaces Event is shaped for);
+> `Record` is provenance — created-at and identifier, the least-read facts on the
+> screen. Ordering by importance means a future section is added to the slot
+> without restructuring the component.
+>
+> This is the seam the Event module's "narrative readiness" rests on. Event
+> participants, referenced locations, involved factions, and AI annotations are
+> all *additional sections in the existing slot*, not a redesign. Nothing is
+> stubbed for them today — the shape simply admits them. Relationship **writes**
+> stay a graph concern: the backend roots them at Character
+> (`POST /characters/{id}/relationships`), so Event does not invent a write path
+> it does not have.
+
 > **As-built (M3) — two engine behaviours worth knowing:**
 >
 > - **The empty list has two meanings.** "Nothing exists yet" (offer *create*)
@@ -219,6 +234,7 @@ plugs into the generic slots.
 | **CharacterStatusBadge** | characters | Renders `alive/dead/unknown` with a semantic token |
 | **AliasList** | characters | Displays/edits the deduped alias set (≤10) |
 | **RegionBadge** | locations | Renders a region, or a quiet "Unassigned" — a region-less place is an unfinished state, not missing data |
+| **TimelinePositionBadge** | events | Renders `timeline_order` in tabular figures. Value-neutral by design: the backend attaches no meaning to any particular integer, so no "unplaced" for zero, no dates, no ordinal suffixes |
 | **EventTimelineField** | events | Specialized control for `timeline_order` |
 | **GraphExplorer** | graph | Container: fetches ego-network, drives the renderer, depth control (`1..3`) |
 | **ShortestPathFinder** | graph | Two entity pickers → shortest-path result (hops + distance) |

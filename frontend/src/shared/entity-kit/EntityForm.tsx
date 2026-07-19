@@ -186,7 +186,18 @@ export function EntityForm<TForm extends FieldValues>({
                         placeholder={spec.placeholder}
                         aria-invalid={invalid || undefined}
                         aria-describedby={describedBy}
-                        {...form.register(spec.name, { valueAsNumber: true })}
+                        {...form.register(spec.name, {
+                          // Not `valueAsNumber`: that maps an emptied input to
+                          // `NaN`, which fails validation with an unreadable
+                          // message and — worse — is unequal to itself, so the
+                          // update diff would see a change every time and send
+                          // a `NaN` that serializes to `null` and is then
+                          // silently dropped by `exclude_none`. Mapping blank to
+                          // `undefined` lets the schema report it as the missing
+                          // required value it is.
+                          setValueAs: (value: unknown) =>
+                            value === "" || value === null ? undefined : Number(value),
+                        })}
                       />
                     )
 
