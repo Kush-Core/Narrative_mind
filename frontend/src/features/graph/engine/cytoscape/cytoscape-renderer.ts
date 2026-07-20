@@ -116,10 +116,16 @@ export function createCytoscapeRenderer(options: GraphRendererOptions): GraphRen
     // viewport interaction is the renderer's job, not a component's.
     userPanningEnabled: true,
     userZoomingEnabled: true,
-    // Nodes stay put: dragging them would imply a persisted position the
-    // backend has no field for. It also leaves the drag gesture unclaimed,
-    // which is why connecting is a click sequence rather than a drag.
-    autoungrabify: true,
+    // Nodes are draggable. Position is a *view* concern — a reader untangling a
+    // dense network — not a persisted one: the backend has no field for it, so a
+    // dragged layout lasts only until a topology change or reload re-runs the
+    // layout. Dragging and the click gestures don't collide, because Cytoscape
+    // fires `tap` only on a release without movement — a drag emits `grab`/`free`
+    // and no `tap`, so it never reads as a select, activate, or connect.
+    //
+    // Grabbing is suspended *during* connect mode (see `setEditingVisual`), the
+    // one temporary editing mode where a node drag would fight click-to-connect.
+    autoungrabify: false,
   })
 
   let destroyed = false
@@ -415,6 +421,10 @@ export function createCytoscapeRenderer(options: GraphRendererOptions): GraphRen
     setEditingVisual(visual) {
       if (destroyed) return
       editingVisual = visual
+      // Freeze node positions while connecting: in this mode a click on a node
+      // chooses the destination, so a drag on it would be ambiguous. Nodes
+      // become draggable again the moment the edit ends.
+      cy.autoungrabify(visual !== null)
       applyEditingVisual()
     },
 

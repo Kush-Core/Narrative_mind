@@ -654,10 +654,23 @@ is independently reviewable and leaves the app in a working state.
 > **Click-to-connect, not drag-to-connect.** The milestone was titled "drag to
 > connect", but its own numbered steps describe a click sequence (select source →
 > initiate → select destination → choose type → confirm), and that is what was
-> built. Nodes are `autoungrabify` by design — the backend has no field for a
-> persisted position — so a drag gesture is unclaimed, but a click sequence is
-> keyboard- and touch-reachable and matches the specified steps. The gesture
-> remains available if drag is later wanted.
+> built. Because connecting is a click and not a drag, the drag gesture stays
+> free for moving nodes — a click sequence is also keyboard- and touch-reachable
+> and matches the specified steps.
+>
+> > **Correction (post-M9): nodes are draggable.** The connect flow above is
+> > unchanged, but the claim that nodes are globally `autoungrabify` was wrong as
+> > a default — it disabled position dragging entirely, not just its persistence.
+> > Node position is a *view* concern (untangling a dense network), not a stored
+> > one: a dragged layout lasts until a topology change or reload re-runs the
+> > layout, and the backend still has no field for it. Dragging and the click
+> > gestures do not collide, because Cytoscape emits `tap` only on a release
+> > without movement — a drag fires `grab`/`free` and no `tap`, so it never reads
+> > as select, activate, or connect. Grabbing is suspended for the duration of
+> > connect mode (`setEditingVisual` toggles `cy.autoungrabify`), the one
+> > temporary editing mode where a node drag would be ambiguous against
+> > click-to-connect. Verified in a real browser, including that a dragged
+> > position survives the in-place edge patch after a relationship is created.
 >
 > **Validity is derived from the backend, not invented.** Because relationship
 > writes are rooted at a Character, a Location→Faction edge is not merely
