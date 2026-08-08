@@ -2,8 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from narrative_mind.core.exceptions import (
-    NarrativeMindError,
+    AuthenticationError,
+    AuthorizationError,
     ConflictError,
+    NarrativeMindError,
     NotFoundError,
     ValidationError,
 )
@@ -15,17 +17,55 @@ def _error_body(code: str, message: str) -> dict:
 
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(NotFoundError)
-    async def _not_found(_: Request, exc: NotFoundError) -> JSONResponse:
-        return JSONResponse(status_code=404, content=_error_body("not_found", exc.message))
+    async def _not_found(
+        _: Request, exc: NotFoundError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content=_error_body("not_found", exc.message),
+        )
 
     @app.exception_handler(ConflictError)
-    async def _conflict(_: Request, exc: ConflictError) -> JSONResponse:
-        return JSONResponse(status_code=409, content=_error_body("conflict", exc.message))
+    async def _conflict(
+        _: Request, exc: ConflictError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=409,
+            content=_error_body("conflict", exc.message),
+        )
 
     @app.exception_handler(ValidationError)
-    async def _validation(_: Request, exc: ValidationError) -> JSONResponse:
-        return JSONResponse(status_code=422, content=_error_body("domain_validation", exc.message))
+    async def _validation(
+        _: Request, exc: ValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content=_error_body("domain_validation", exc.message),
+        )
+
+    @app.exception_handler(AuthenticationError)
+    async def _authentication(
+        _: Request, exc: AuthenticationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content=_error_body("authentication_error", exc.message),
+        )
+
+    @app.exception_handler(AuthorizationError)
+    async def _authorization(
+        _: Request, exc: AuthorizationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content=_error_body("authorization_error", exc.message),
+        )
 
     @app.exception_handler(NarrativeMindError)
-    async def _fallback(_: Request, exc: NarrativeMindError) -> JSONResponse:
-        return JSONResponse(status_code=400, content=_error_body("bad_request", exc.message))
+    async def _fallback(
+        _: Request, exc: NarrativeMindError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content=_error_body("bad_request", exc.message),
+        )

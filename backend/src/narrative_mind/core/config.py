@@ -21,6 +21,11 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Authentication / JWT
+    jwt_secret_key: str = "9b718095f5c304e01c9b042c4da2dab96e022b5a2b029826237cc523e71a9170"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:

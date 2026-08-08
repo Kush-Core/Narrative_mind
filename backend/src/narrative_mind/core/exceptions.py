@@ -16,3 +16,11 @@ class ConflictError(NarrativeMindError):
 
 class ValidationError(NarrativeMindError):
     """A domain rule (beyond schema validation) was broken."""
+
+
+class AuthenticationError(NarrativeMindError):
+    """Authentication failed or credentials/token are invalid."""
+
+
+class AuthorizationError(NarrativeMindError):
+    """The authenticated user is not allowed to perform the operation."""

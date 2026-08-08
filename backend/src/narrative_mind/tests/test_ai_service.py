@@ -2,6 +2,8 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
+from narrative_mind.api.deps import get_current_user
+from narrative_mind.domain.user import User
 from narrative_mind.main import create_app
 from narrative_mind.providers.deps import get_llm
 from narrative_mind.services.ai_service import AIService
@@ -77,8 +79,13 @@ def test_describe_endpoint_uses_stub_provider() -> None:
     # Overriding get_llm proves the /ai endpoint runs without a real Ollama server.
     # The TestClient is used without a context manager so app lifespan (and the
     # Neo4j connection it opens) is skipped; /ai/describe touches only the provider.
+    # get_current_user is stubbed too, since it would otherwise hit Neo4j via
+    # UserRepository to look up the authenticated user.
     app = create_app()
     app.dependency_overrides[get_llm] = lambda: _StubLLM()
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id="test-user", email="test@example.com"
+    )
     client = TestClient(app)
     try:
         res = client.post("/ai/describe", json={"name": "Aria Vane"})
