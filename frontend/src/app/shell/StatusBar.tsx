@@ -1,6 +1,7 @@
 import { CircleDotIcon } from "lucide-react"
 
 import { type ConnectionStatus, useHealthQuery } from "@/features/system"
+import { useSessionStore } from "@/shared/auth/session-store"
 import { appConfig } from "@/shared/config/env"
 import { cn } from "@/shared/lib/utils"
 import { useUiStore } from "@/shared/store/ui-store"
@@ -47,6 +48,7 @@ const STATUS_PRESENTATION: Record<
 
 export function StatusBar() {
   const resetLayout = useUiStore((state) => state.resetLayout)
+  const clearSession = useSessionStore((state) => state.clearSession)
   const { status, data, isFetching, refetch } = useHealthQuery()
 
   const presentation = STATUS_PRESENTATION[status]
@@ -94,6 +96,17 @@ export function StatusBar() {
         className="text-2xs text-chrome-foreground hover:text-foreground"
       >
         Reset layout
+      </Button>
+
+      <Separator orientation="vertical" className="h-3!" />
+
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={() => clearSession()}
+        className="text-2xs text-chrome-foreground hover:text-foreground"
+      >
+        Sign out
       </Button>
     </footer>
   )

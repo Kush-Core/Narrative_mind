@@ -21,7 +21,11 @@ import {
   apiErrorFromParseFailure,
   apiErrorFromResponse,
 } from "@/shared/api/api-error"
-import { type AuthTokenProvider, nullAuthTokenProvider } from "@/shared/api/auth"
+import {
+  type AuthTokenProvider,
+  nullAuthTokenProvider,
+  sessionAuthTokenProvider,
+} from "@/shared/api/auth"
 import { appConfig } from "@/shared/config/env"
 import { buildUrl, type QueryParams } from "@/shared/lib/url"
 
@@ -101,7 +105,11 @@ export class HttpClient {
     const parsed = await readBody(response)
 
     if (!response.ok) {
-      throw this.#reportError(apiErrorFromResponse(response.status, parsed, requestInfo))
+      const error = apiErrorFromResponse(response.status, parsed, requestInfo)
+      // A rejected token (missing, expired, malformed) is a session event, not
+      // just a failed request — the provider clears it so the app notices.
+      if (error.status === 401) this.#auth.onUnauthorized?.()
+      throw this.#reportError(error)
     }
 
     if (!schema) return parsed as T
@@ -192,4 +200,4 @@ async function readBody(response: Response): Promise<unknown> {
 }
 
 /** The app-wide client. Feature resource modules import this instance. */
-export const httpClient = new HttpClient()
+export const httpClient = new HttpClient({ auth: sessionAuthTokenProvider })

@@ -32,6 +32,11 @@ export const endpoints = {
     health: () => "/health",
   },
 
+  auth: {
+    register: () => "/auth/register",
+    login: () => "/auth/login",
+  },
+
   /**
    * Generic CRUD paths for any entity collection. The four entity routers are
    * byte-for-byte parallel (analysis §API Surface), so one builder serves all

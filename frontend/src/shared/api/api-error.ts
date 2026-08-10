@@ -24,6 +24,7 @@ export type ApiErrorCode =
   | "conflict"
   | "domain_validation"
   | "bad_request"
+  | "authentication_error"
   | "validation"
   | "network"
   | "timeout"
@@ -100,6 +101,7 @@ const STATUS_FALLBACKS: Readonly<Record<number, string>> = {
 }
 
 function statusToCode(status: number): ApiErrorCode {
+  if (status === 401) return "authentication_error"
   if (status === 404) return "not_found"
   if (status === 409) return "conflict"
   if (status === 422) return "validation"

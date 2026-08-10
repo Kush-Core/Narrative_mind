@@ -27,6 +27,7 @@ export const DomainErrorCodeSchema = z.enum([
   "conflict",
   "domain_validation",
   "bad_request",
+  "authentication_error",
 ])
 
 export type DomainErrorCode = z.infer<typeof DomainErrorCodeSchema>

@@ -85,6 +85,8 @@ export function toUserTitle(error: unknown): string {
     case "validation":
     case "domain_validation":
       return "Invalid data"
+    case "authentication_error":
+      return "Sign-in required"
     case "network":
     case "timeout":
       return "Connection problem"

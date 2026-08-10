@@ -3,6 +3,7 @@ import { createBrowserRouter, type RouteObject } from "react-router-dom"
 
 import { WorkspaceLayout } from "@/app/shell/WorkspaceLayout"
 import { WorkspaceWelcome } from "@/app/shell/WorkspaceWelcome"
+import { RequireAuth } from "@/routes/guards/RequireAuth"
 import { NotFoundRoute } from "@/routes/not-found"
 import { paths } from "@/routes/paths"
 import { RouteErrorRoute } from "@/routes/route-error"
@@ -59,8 +60,28 @@ const placeholderPaths = [paths.graph.shortestPath()]
 
 export const router = createBrowserRouter([
   {
+    path: paths.auth.login(),
+    errorElement: <RouteErrorRoute />,
+    lazy: async () => {
+      const { LoginPage } = await import("@/features/auth")
+      return { Component: LoginPage }
+    },
+  },
+  {
+    path: paths.auth.register(),
+    errorElement: <RouteErrorRoute />,
+    lazy: async () => {
+      const { RegisterPage } = await import("@/features/auth")
+      return { Component: RegisterPage }
+    },
+  },
+  {
     path: "/",
-    element: <WorkspaceLayout />,
+    element: (
+      <RequireAuth>
+        <WorkspaceLayout />
+      </RequireAuth>
+    ),
     errorElement: <RouteErrorRoute />,
     children: [
       {

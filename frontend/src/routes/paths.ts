@@ -10,6 +10,11 @@
 export const paths = {
   root: () => "/",
 
+  auth: {
+    login: () => "/login",
+    register: () => "/register",
+  },
+
   characters: {
     list: () => "/characters",
     detail: (id: string) => `/characters/${id}`,
