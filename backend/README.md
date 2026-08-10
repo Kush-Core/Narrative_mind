@@ -70,14 +70,16 @@ Environment variables (matched case-insensitively to `Settings` fields):
 
 ### 3. Start Neo4j
 
-Any Neo4j 5.x instance works. For a local container:
+Any Neo4j 5.x instance works. From the repo root, a `docker-compose.yml` is
+provided for local development:
 
 ```bash
-docker run --name narrative-mind-neo4j \
-  -p 7474:7474 -p 7687:7687 \
-  -e NEO4J_AUTH=neo4j/password123 \
-  -d neo4j:5
+docker compose up -d neo4j
 ```
+
+This starts Neo4j 5 on `localhost:7687` (Bolt) and `localhost:7474` (browser
+UI) with credentials `neo4j` / `password123`, matching `.env.example`, and
+persists data in a named volume across restarts.
 
 Constraints and indexes are created automatically on application startup
 (see `db/migrations.py`); no manual schema step is required.
