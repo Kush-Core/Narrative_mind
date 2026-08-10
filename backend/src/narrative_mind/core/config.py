@@ -12,17 +12,17 @@ class Settings(BaseSettings):
     # Neo4j Configuration
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "password123"
+    neo4j_password: str = ""
 
     # Ollama (used from Phase 10)
     ollama_host: str = "http://localhost:11434"
     ollama_chat_model: str = "llama3.2:3b"
     ollama_embed_model: str = "nomic-embed-text-v2-moe:latest"
 
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = []
 
     # Authentication / JWT
-    jwt_secret_key: str = "9b718095f5c304e01c9b042c4da2dab96e022b5a2b029826237cc523e71a9170"
+    jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
