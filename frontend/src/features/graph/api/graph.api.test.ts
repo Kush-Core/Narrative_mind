@@ -10,7 +10,7 @@
 import { HttpResponse } from "msw"
 import { describe, expect, it } from "vitest"
 
-import { fetchCharacterNetwork } from "@/features/graph/api/graph.api"
+import { fetchCharacterNetwork, fetchShortestPath } from "@/features/graph/api/graph.api"
 import { ApiError } from "@/shared/api/api-error"
 import { domainError, getJson, server } from "@/test/msw/server"
 
@@ -98,5 +98,79 @@ describe("fetchCharacterNetwork", () => {
 
     expect(error).toBeInstanceOf(ApiError)
     expect(error.code).toBe("parse")
+  })
+})
+
+describe("fetchShortestPath", () => {
+  it("requests the path with source and target query params", async () => {
+    let url = ""
+    server.use(
+      getJson("/graph/shortest-path", ({ request }) => {
+        url = request.url
+        return HttpResponse.json({
+          hops: [
+            { id: "c-1", name: "Aria Vane" },
+            { id: "c-2", name: "Roderic" },
+          ],
+          distance: 1,
+        })
+      }),
+    )
+
+    await fetchShortestPath("c-1", "c-2")
+
+    const params = new URL(url).searchParams
+    expect(new URL(url).pathname).toBe("/graph/shortest-path")
+    expect(params.get("source")).toBe("c-1")
+    expect(params.get("target")).toBe("c-2")
+  })
+
+  it("returns the validated hop sequence and distance", async () => {
+    server.use(
+      getJson("/graph/shortest-path", () =>
+        HttpResponse.json({
+          hops: [
+            { id: "c-1", name: "Aria Vane" },
+            { id: "c-3", name: "Bram" },
+            { id: "c-2", name: "Roderic" },
+          ],
+          distance: 2,
+        }),
+      ),
+    )
+
+    const path = await fetchShortestPath("c-1", "c-2")
+
+    expect(path.distance).toBe(2)
+    expect(path.hops).toEqual([
+      { id: "c-1", name: "Aria Vane" },
+      { id: "c-3", name: "Bram" },
+      { id: "c-2", name: "Roderic" },
+    ])
+  })
+
+  it("defaults a hop's missing name rather than failing", async () => {
+    server.use(
+      getJson("/graph/shortest-path", () =>
+        HttpResponse.json({ hops: [{ id: "c-1" }, { id: "c-2" }], distance: 1 }),
+      ),
+    )
+
+    const path = await fetchShortestPath("c-1", "c-2")
+
+    expect(path.hops[0]).toEqual({ id: "c-1", name: "Untitled" })
+  })
+
+  it("surfaces no path found as a not_found ApiError", async () => {
+    server.use(
+      getJson("/graph/shortest-path", () =>
+        domainError(404, "not_found", "No path found between c-1 and c-9"),
+      ),
+    )
+
+    const error = (await fetchShortestPath("c-1", "c-9").catch((c: unknown) => c)) as ApiError
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.isNotFound).toBe(true)
   })
 })

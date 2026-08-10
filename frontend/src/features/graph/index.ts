@@ -17,3 +17,4 @@ export type {
   GraphViewport,
 } from "@/features/graph/model/graph.types"
 export { GraphExplorerPage } from "@/features/graph/pages/GraphExplorerPage"
+export { ShortestPathPage } from "@/features/graph/pages/ShortestPathPage"

@@ -110,3 +110,33 @@ export const NetworkDepthSchema = z.coerce
   .max(NETWORK_DEPTH.max)
   .catch(NETWORK_DEPTH.default)
   .default(NETWORK_DEPTH.default)
+
+/**
+ * The wire contract for `GET /graph/shortest-path`.
+ *
+ * Verified against `GraphRepository._sp_tx`:
+ *
+ *   shortest_path → { hops: [{ id, name }], distance: int }
+ *
+ * `hops` is the full node sequence from source to target inclusive, so
+ * `hops.length === distance + 1`; `distance` is carried separately anyway
+ * rather than derived, because it is the thing Cypher actually measured.
+ * Like the network endpoint, this handler is declared `-> dict`, so this
+ * schema is the only guard between a Cypher change and a crash in the page.
+ */
+const PathHopSchema = z.object({
+  id: IdSchema,
+  name: z.string().nullish(),
+})
+
+export const ShortestPathSchema = z
+  .object({
+    hops: z.array(PathHopSchema),
+    distance: z.number().int().nonnegative(),
+  })
+  .transform((wire) => ({
+    hops: wire.hops.map((hop) => ({ id: hop.id, name: hop.name ?? "Untitled" })),
+    distance: wire.distance,
+  }))
+
+export type ShortestPath = z.infer<typeof ShortestPathSchema>

@@ -14,7 +14,12 @@
  * hand-written resource functions").
  */
 
-import { type CharacterNetwork, CharacterNetworkSchema } from "@/features/graph/model/graph.schema"
+import {
+  type CharacterNetwork,
+  CharacterNetworkSchema,
+  type ShortestPath,
+  ShortestPathSchema,
+} from "@/features/graph/model/graph.schema"
 import { endpoints } from "@/shared/api/endpoints"
 import { httpClient } from "@/shared/api/http-client"
 
@@ -37,6 +42,26 @@ export function fetchCharacterNetwork(
   return httpClient.get<CharacterNetwork>(endpoints.graph.network(characterId), {
     query: { depth },
     schema: CharacterNetworkSchema,
+    signal: options.signal,
+  })
+}
+
+/**
+ * The shortest chain of relationships between two characters.
+ *
+ * Rejects (`not_found`) when no path exists within the backend's 6-hop search
+ * bound (`GraphRepository._sp_tx`) — that is a legitimate outcome, not an
+ * error the page should mask, so it is left to surface through the same
+ * `ApiError` path as every other lookup failure.
+ */
+export function fetchShortestPath(
+  source: string,
+  target: string,
+  options: GraphCallOptions = {},
+): Promise<ShortestPath> {
+  return httpClient.get<ShortestPath>(endpoints.graph.shortestPath(), {
+    query: { source, target },
+    schema: ShortestPathSchema,
     signal: options.signal,
   })
 }

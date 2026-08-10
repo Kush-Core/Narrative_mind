@@ -56,7 +56,7 @@ function entityRoutes(
 }
 
 /** Destinations whose slices are still to come (M7+). */
-const placeholderPaths = [paths.graph.shortestPath()]
+const placeholderPaths: string[] = []
 
 export const router = createBrowserRouter([
   {
@@ -119,6 +119,14 @@ export const router = createBrowserRouter([
             lazy: async () => {
               const { GraphExplorerPage } = await import("@/features/graph")
               return { Component: GraphExplorerPage }
+            },
+          },
+
+          {
+            path: paths.graph.shortestPath(),
+            lazy: async () => {
+              const { ShortestPathPage } = await import("@/features/graph")
+              return { Component: ShortestPathPage }
             },
           },
 

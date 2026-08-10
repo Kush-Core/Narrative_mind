@@ -112,7 +112,6 @@ export const navSections: NavSection[] = [
         label: "Shortest path",
         path: paths.graph.shortestPath(),
         icon: RouteIcon,
-        pending: true,
       },
     ],
   },

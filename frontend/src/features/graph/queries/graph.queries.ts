@@ -15,7 +15,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 
-import { fetchCharacterNetwork } from "@/features/graph/api/graph.api"
+import { fetchCharacterNetwork, fetchShortestPath } from "@/features/graph/api/graph.api"
 import type { GraphModel } from "@/features/graph/model/graph.types"
 import { buildEgoNetworkModel } from "@/features/graph/services/build-graph-model"
 import { queryKeys } from "@/shared/api/query-keys"
@@ -32,5 +32,20 @@ export function useCharacterNetworkQuery(characterId: string | undefined, depth:
     queryFn: ({ signal }) => fetchCharacterNetwork(characterId ?? "", depth, { signal }),
     enabled: Boolean(characterId),
     select: (network): GraphModel => buildEgoNetworkModel(network, depth),
+  })
+}
+
+/**
+ * The shortest chain of relationships between two characters.
+ *
+ * Disabled until both endpoints are chosen, for the same reason as the
+ * network query: a request with a missing id is not "loading", it is not a
+ * request yet.
+ */
+export function useShortestPathQuery(source: string | undefined, target: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.graph.shortestPath(source ?? "", target ?? ""),
+    queryFn: ({ signal }) => fetchShortestPath(source ?? "", target ?? "", { signal }),
+    enabled: Boolean(source) && Boolean(target),
   })
 }
