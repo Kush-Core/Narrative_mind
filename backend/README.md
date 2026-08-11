@@ -1,18 +1,17 @@
-# Narrative Mind — A Narrative Intelligence Platform
+# Narrative Mind — Backend
 
-Narrative Mind is a platform for building, understanding, and reasoning about
-fictional worlds. Its foundational capability is the **Narrative Graph**: an
-async **FastAPI + Neo4j + Ollama** backend that models the entities of a
-fictional world — `Character`, `Location`, `Faction`, `Event` — and the
-relationships between them as a graph, and exposes two AI endpoints (prose
-generation and schema-constrained entity extraction) behind a swappable LLM
-provider.
+The Narrative Graph API: an async **FastAPI + Neo4j** service that models the
+entities of a fictional world — `Character`, `Location`, `Faction`, `Event` —
+and the relationships between them as a graph, and exposes two AI endpoints
+(prose generation and schema-constrained entity extraction) behind a swappable
+LLM provider: **Ollama** for local development, **Groq** in deployment. One
+`LLM_PROVIDER` env var chooses between them and nothing above `providers/`
+knows which is in use.
 
-This repository currently implements the Narrative Graph (V1). The longer-term
-platform vision layers additional narrative intelligence capabilities on top
-of it — Character Management, Timeline, Rich Text Editing, World Encyclopedia,
-AI Reasoning, Consistency Checking, and Knowledge Search — none of which are
-implemented yet.
+This document covers the backend only — setup, the API surface, and deploying
+it. For what the project is, how the two halves fit together, and what is and
+isn't built, see the [root README](../README.md); for the web workspace that
+consumes this API, see [`../frontend/README.md`](../frontend/README.md).
 
 ## Architecture
 
@@ -22,7 +21,8 @@ with `core`, `domain`, and `providers` as leaves.
 - **`api/`** — routers and request-scoped dependency injection (HTTP ↔ domain).
 - **`services/`** — business rules and orchestration; raise domain errors only.
 - **`repositories/`** — all Cypher; return plain dicts via map projections.
-- **`providers/`** — the LLM behind a `Protocol` (`OllamaProvider`).
+- **`providers/`** — the LLM behind a `Protocol` (`LLMProvider`), implemented
+  twice: `OllamaProvider` and `GroqProvider`.
 - **`domain/`** — Pydantic v2 models (Create/Update/Read DTO triads, `Page[T]`).
 - **`core/`** — config, logging, exception hierarchy, error handlers.
 - **`db/`** — async Neo4j driver lifecycle, session dependency, idempotent migrations.
@@ -32,7 +32,9 @@ with `core`, `domain`, and `providers` as leaves.
 - **Python 3.12+**
 - **[uv](https://docs.astral.sh/uv/)** — packaging and virtual-environment manager
 - **Neo4j 5.x** — reachable via the Bolt protocol (local Docker or a managed instance)
-- **[Ollama](https://ollama.com)** — local LLM runtime (required for the `/ai` endpoints)
+- **[Ollama](https://ollama.com)** — local LLM runtime; required for the `/ai`
+  endpoints under the default provider, and not needed at all if you point
+  `LLM_PROVIDER` at Groq. Everything else works without it.
 
 ## Setup
 
@@ -52,21 +54,51 @@ Copy the example file and adjust values as needed:
 cp .env.example .env
 ```
 
-Environment variables (matched case-insensitively to `Settings` fields):
+Every setting below is a field on `Settings` (`core/config.py`), matched
+case-insensitively, read from `.env` or the real environment. Unknown variables
+are ignored rather than rejected (`extra="ignore"`), so a stray var from another
+project's config won't stop the app booting. The **Default** column is the value
+the app falls back to when the variable is absent — not what `.env.example`
+ships, which is called out where the two differ.
 
-| Variable | Purpose | Example |
+**Application**
+
+| Variable | Purpose | Default |
 |---|---|---|
-| `ENVIRONMENT` | `development` or `production` | `development` |
-| `DEBUG` | Verbose logging / debug mode | `true` |
-| `NEO4J_URI` | Bolt URI of the Neo4j server | `neo4j://127.0.0.1:7687` |
+| `APP_NAME` | FastAPI title, shown at `/docs` | `Narrative Mind` |
+| `ENVIRONMENT` | `development` or `production`; echoed back by `/health` | `development` |
+| `DEBUG` | Verbose logging and FastAPI debug mode | `true` |
+| `CORS_ORIGINS` | JSON array of allowed browser origins | `[]` — i.e. no browser origin is allowed until you set it |
+
+**Neo4j**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `NEO4J_URI` | Bolt URI of the server (`neo4j+s://…` for Aura) | `bolt://localhost:7687` |
 | `NEO4J_USERNAME` | Neo4j username | `neo4j` |
-| `NEO4J_PASSWORD` | Neo4j password | `password123` |
+| `NEO4J_PASSWORD` | Neo4j password — **must be set**; the empty default won't authenticate | `""` (`.env.example` ships `password123`, matching the compose file) |
+
+**LLM provider** — only affects the two `/ai` routes
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `LLM_PROVIDER` | `ollama` or `groq`; compared lowercased and stripped | `ollama` |
 | `OLLAMA_HOST` | Ollama server base URL | `http://localhost:11434` |
 | `OLLAMA_CHAT_MODEL` | Chat model for `/ai/describe` and `/ai/extract` | `llama3.2:3b` |
-| `OLLAMA_EMBED_MODEL` | Embedding model (reserved for RAG in V2) | `nomic-embed-text-v2-moe:latest` |
-| `CORS_ORIGINS` | JSON array of allowed browser origins | `["http://localhost:5173"]` |
+| `OLLAMA_EMBED_MODEL` | Embedding model — Ollama only, and unused in V1 (reserved for RAG in V2; `GroqProvider.embed` raises `NotImplementedError`) | `nomic-embed-text-v2-moe:latest` |
+| `GROQ_API_KEY` | **Required when `LLM_PROVIDER=groq`**; never read otherwise | `""` |
+| `GROQ_CHAT_MODEL` | Groq chat model. Keep this an `openai/gpt-oss-*` model — `/ai/extract` sends a `json_schema` response format that only those support | `openai/gpt-oss-120b` |
 
-`.env` is gitignored; never commit real secrets.
+**Authentication**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `JWT_SECRET_KEY` | HS256 signing key — **must be set to a real random value** (`openssl rand -hex 32`). PyJWT rejects an empty HMAC key, so with the default left blank `/auth/register` still succeeds but `/auth/login` fails with a 500 | `""` |
+| `JWT_ALGORITHM` | Token signing algorithm | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token lifetime in minutes | `30` |
+
+`.env` is gitignored; never commit real secrets. The `.env.example` values for
+`GROQ_API_KEY` and `JWT_SECRET_KEY` are placeholders, not working credentials.
 
 ### 3. Start Neo4j
 
@@ -85,6 +117,9 @@ Constraints and indexes are created automatically on application startup
 (see `db/migrations.py`); no manual schema step is required.
 
 ### 4. Start Ollama and pull the model
+
+Only for the default `LLM_PROVIDER=ollama`; skip this if you are running against
+Groq (see the next section).
 
 ```bash
 ollama pull llama3.2:3b            # required for /ai/describe and /ai/extract
@@ -213,7 +248,8 @@ curl "localhost:8000/graph/shortest-path?source=<ID_A>&target=<ID_B>" \
   -H "authorization: Bearer $TOKEN"
 ```
 
-AI generation and extraction (require Ollama running with the chat model):
+AI generation and extraction (require whichever provider `LLM_PROVIDER` selects
+to be reachable — by default, Ollama running with the chat model pulled):
 
 ```bash
 curl -X POST localhost:8000/ai/describe \

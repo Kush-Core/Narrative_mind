@@ -1,7 +1,9 @@
 # Narrative Mind — Frontend
 
 The desktop-class web workspace for Narrative Mind, built with **React +
-TypeScript + Vite + Tailwind CSS (v4, CSS-first) + shadcn/ui**.
+TypeScript + Vite + Tailwind CSS (v4, CSS-first) + shadcn/ui**. This document
+covers the frontend only; for the project as a whole see the
+[root README](../README.md).
 
 The architecture, file structure, API integration, state management, component
 hierarchy, and milestone plan are documented in
@@ -102,7 +104,30 @@ than the frontend itself.
 npm run test
 ```
 
-Vitest + Testing Library + MSW (mocked backend responses at the network
-boundary, not mocked modules). Canvas-backed graph rendering is exercised
-through its own renderer-boundary tests rather than a real `<canvas>`, since
-jsdom has no canvas implementation.
+**Vitest + MSW.** The backend is mocked at the network boundary rather than by
+stubbing modules, and `onUnhandledRequest: "error"` turns a request the handlers
+don't describe into a failure instead of a silent pass — see
+[`src/test/setup.ts`](src/test/setup.ts) and
+[`src/test/msw/server.ts`](src/test/msw/server.ts), which names the response
+shapes the suite asserts against (an empty page, a domain 404, FastAPI's
+separate 422).
+
+What is covered: the network spine in `shared/api` — HTTP client, error mapping,
+the `createEntityResource` factory, entity lookup; the shared wire and page
+schemas plus all four per-entity schemas and their mappers; the domain rules in
+`shared/domain` (entity kinds, relationship pairing and direction); and the
+graph's pure layers — `build-graph-model`, `connect-rules`, and the Cytoscape
+translation in `to-elements`. Every test is pure TypeScript, so the whole suite
+runs in a couple of seconds with no backend.
+
+Tests run in Vitest's `node` environment and only `*.test.ts` is collected;
+`stylesheet.test.ts` opts into jsdom with a docblock because the stylesheet
+resolves design tokens through `getComputedStyle`. The graph is therefore
+verified at its renderer boundary — model → Cytoscape elements, and the
+stylesheet's rules and their precedence order — rather than by painting, since
+Cytoscape's canvas renderer needs a real 2D context that jsdom does not provide.
+
+**There are no component tests yet**: no `@testing-library/*` dependency and no
+`.test.tsx` file in the tree, so rendering, forms, and interaction are currently
+verified by hand. The milestone plan schedules component tests as M8 work
+([`../docs/frontend/IMPLEMENTATION_PLAN.md`](../docs/frontend/IMPLEMENTATION_PLAN.md)).

@@ -1,12 +1,54 @@
-# Repository Analysis — Narrative Mind
+# Repository Analysis — Narrative Mind Backend (snapshot: 2026-07-18)
 
-> Factual knowledge base of the repository as it currently exists. Every statement
-> below is derived from files present in the repository. Where a detail cannot be
-> verified from the codebase, it is explicitly marked **UNKNOWN**. This document
-> describes the current state only; it proposes no improvements and includes no
-> future plans beyond what the source files themselves declare.
-
-Analysis date: 2026-07-18. Branch: `main`.
+> ## ⚠️ Historical snapshot — not the current state
+>
+> This is a point-in-time inventory of the repository as it stood on
+> **2026-07-18**, when it contained the backend and nothing else. Every statement
+> was derived from the files present at that date, with anything unverifiable
+> marked **UNKNOWN**. It has deliberately **not** been updated since; it is kept
+> as a record of that state and for the depth it goes into on backend internals
+> that no README covers — the request lifecycle, the repository layer's Cypher,
+> dependency injection, error handling, and naming conventions.
+>
+> **For the current state, read these instead:** the
+> [root README](../README.md) (what the project is, both halves, what is and
+> isn't built), [backend/README.md](../backend/README.md) (setup, complete
+> environment reference, API surface, deployment), and
+> [frontend/README.md](../frontend/README.md) (the web workspace).
+>
+> ### What has changed since this snapshot
+>
+> As of 2026-08-11, verified against `git log`:
+>
+> - **A full frontend exists.** React + TypeScript + Vite workspace with auth,
+>   entity CRUD, a Cytoscape graph explorer, and shortest-path search, built
+>   from `89166cd` (2026-07-18) onward. The *Frontend Status* section below —
+>   "there is no frontend in the repository" — is the single most out-of-date
+>   claim in this document. Design documents live in [`docs/frontend/`](frontend/).
+> - **JWT authentication** (`158ace3`, 2026-08-08) — `POST /auth/register` and
+>   `POST /auth/login`, plus `core/security.py`, `domain/user.py`,
+>   `repositories/user_repo.py`, `services/user_service.py`, and `test_auth.py`.
+>   Every route except `/health` and `/auth/*` now requires a bearer token, and
+>   the `conftest.py` fixtures were split into authenticated and unauthenticated
+>   clients. None of this appears below.
+> - **A second LLM provider** (`0ae3277`, 2026-08-11) — `GroqProvider` alongside
+>   `OllamaProvider`, selected by a new `LLM_PROVIDER` setting. Statements below
+>   that treat `OllamaProvider` as the Protocol's only implementation are stale.
+> - **Configuration changed** — hardcoded secret defaults were removed
+>   (`2be4544`), so `neo4j_password` and `cors_origins` no longer default to
+>   real values; `neo4j_user` was renamed `neo4j_username` (`8e07763`); and the
+>   Groq and JWT settings were added. The *Configuration* table below predates
+>   all of it.
+> - **New infrastructure** — `docker-compose.yml` for local Neo4j (`22ac6c9`),
+>   `backend/vercel.json` + pinned `requirements.txt` for Vercel (`ac81fdb`),
+>   and `backend/scripts/seed_world.py`, a reproducible world seed (`3e79f0c`).
+> - **Relationship creation became entity-agnostic** (`98c54fc`, 2026-07-19).
+> - **Documentation** — a root README now exists, as does `docs/`, both of which
+>   this document says are absent.
+>
+> Sections whose text is now wrong carry an inline note. The backend's layering,
+> request lifecycle, repository patterns, DTO design, error handling, and naming
+> conventions are otherwise unchanged and still describe the code accurately.
 
 ---
 
@@ -37,6 +79,10 @@ directory for a "v2 monorepo layout" (commits `5af102b`, `2b0e132`).
 ---
 
 # Repository Structure
+
+> **Superseded.** The root now also holds `frontend/`, `docs/`, `README.md`, and
+> `docker-compose.yml`; `backend/` gained `scripts/seed_world.py`, `vercel.json`,
+> and `requirements.txt`. See the [root README](../README.md#repository-layout).
 
 The repository root contains a single application directory, `backend/`. There is
 **no `frontend/` directory and no `docs/` directory** prior to this analysis
@@ -314,6 +360,11 @@ returned to the caller only.
 
 # API Surface
 
+> **Incomplete now.** The `auth` router (`POST /auth/register`, `POST /auth/login`)
+> was added later, and every route in the table below except `/health` now
+> requires a bearer token. Current table:
+> [backend/README.md](../backend/README.md#api-surface-v1).
+
 Routers are aggregated in
 [api/routers/__init__.py](../backend/src/narrative_mind/api/routers/__init__.py)
 in the order: systems, characters, locations, factions, events, graph, ai.
@@ -403,6 +454,11 @@ length bounds on `name`.
 ---
 
 # Dependency Injection
+
+> **Changed since.** `get_llm` now branches on `LLM_PROVIDER` between two cached
+> builders — `_build_ollama_provider` and `_build_groq_provider` — rather than
+> always returning an `OllamaProvider`. `api/deps.py` also gained
+> `CurrentUserDep` and `AuthService_Dep` with the auth work.
 
 Two DI modules:
 
@@ -495,6 +551,12 @@ handlers.
 
 # Configuration
 
+> **Stale table.** `neo4j_user` is now `neo4j_username`; `neo4j_password` and
+> `cors_origins` no longer carry real defaults (`""` and `[]`); and
+> `llm_provider`, `groq_api_key`, `groq_chat_model`, `jwt_secret_key`,
+> `jwt_algorithm`, and `access_token_expire_minutes` were added. Complete
+> reference: [backend/README.md](../backend/README.md#2-configure-environment).
+
 **Settings** ([core/config.py](../backend/src/narrative_mind/core/config.py)):
 `Settings(BaseSettings)` from `pydantic-settings`, `model_config` uses
 `env_file=".env"`, `env_file_encoding="utf-8"`, `extra="ignore"`. Fields with
@@ -551,6 +613,13 @@ Verified observations (descriptive, not prescriptive):
 
 # Existing Documentation
 
+> **Superseded.** There is now a [root README](../README.md), a
+> [frontend README](../frontend/README.md), and this `docs/` directory (including
+> six frontend design documents in [`docs/frontend/`](frontend/)).
+> `backend/README.md` has since gained JWT auth, LLM-provider, and deployment
+> sections. Still true: no `CHANGELOG`, `CONTRIBUTING`, `LICENSE`, ADRs, or
+> committed OpenAPI export.
+
 - **[backend/README.md](../backend/README.md)** — the primary documentation:
   overview, architecture summary, prerequisites, setup (uv sync, `.env`, Neo4j
   Docker, Ollama), run command, an API-surface table, example curl requests, and
@@ -569,6 +638,10 @@ Verified observations (descriptive, not prescriptive):
 ---
 
 # Third-Party Dependencies
+
+> **Incomplete now.** `groq`, `pyjwt`, and `pwdlib[argon2]` were added with the
+> Groq provider and JWT auth. A pinned `requirements.txt` (exported from
+> `uv.lock` for Vercel, which does not read the lockfile) is also committed now.
 
 From [backend/pyproject.toml](../backend/pyproject.toml). Requires Python `>=3.12`
 (pinned to `3.12` in `.python-version`).
@@ -607,6 +680,12 @@ environment/lockfile resolution.
 
 # Testing Structure
 
+> **Changed since.** `test_auth.py` was added, and `conftest.py` now provides two
+> fixtures: `unauthenticated_client` and a `client` that registers and logs in a
+> uniquely-named user, so the integration tests below run authenticated. The
+> frontend has its own Vitest + MSW suite — see
+> [frontend/README.md](../frontend/README.md#testing).
+
 Location: [backend/src/narrative_mind/tests/](../backend/src/narrative_mind/tests/).
 Test framework is pytest. VS Code is configured
 ([.vscode/settings.json](../.vscode/settings.json)) to run pytest against the
@@ -642,7 +721,15 @@ and clean up the nodes they create (verified in `test_characters.py` and
 
 ---
 
-# Current Frontend Status
+# Frontend Status (as of 2026-07-18 — since superseded)
+
+> **No longer true.** The frontend was bootstrapped the same day this snapshot
+> was taken (`89166cd`) and built out through nine milestones: a React 19 +
+> TypeScript + Vite workspace with auth, CRUD for all four entity types, a
+> Cytoscape graph explorer, and shortest-path search. See
+> [frontend/README.md](../frontend/README.md) and
+> [`docs/frontend/IMPLEMENTATION_PLAN.md`](frontend/IMPLEMENTATION_PLAN.md). The
+> paragraph below is retained as the record of the pre-frontend state.
 
 There is **no frontend in the repository** (verified: no `frontend/` directory,
 no JS/TS package files, no HTML/CSS assets). The only client-facing surfaces are
