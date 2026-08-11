@@ -59,7 +59,7 @@ Environment variables (matched case-insensitively to `Settings` fields):
 | `ENVIRONMENT` | `development` or `production` | `development` |
 | `DEBUG` | Verbose logging / debug mode | `true` |
 | `NEO4J_URI` | Bolt URI of the Neo4j server | `neo4j://127.0.0.1:7687` |
-| `NEO4J_USER` | Neo4j username | `neo4j` |
+| `NEO4J_USERNAME` | Neo4j username | `neo4j` |
 | `NEO4J_PASSWORD` | Neo4j password | `password123` |
 | `OLLAMA_HOST` | Ollama server base URL | `http://localhost:11434` |
 | `OLLAMA_CHAT_MODEL` | Chat model for `/ai/describe` and `/ai/extract` | `llama3.2:3b` |

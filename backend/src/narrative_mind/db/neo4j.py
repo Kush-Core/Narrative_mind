@@ -12,7 +12,7 @@ async def connect(settings: Settings) -> AsyncDriver:
     if _driver is None:
         _driver = AsyncGraphDatabase.driver(
             settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
+            auth=(settings.neo4j_username, settings.neo4j_password),
         )
         await _driver.verify_connectivity()
     return _driver

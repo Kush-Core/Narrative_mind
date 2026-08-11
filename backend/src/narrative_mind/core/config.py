@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # Neo4j Configuration
     neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
+    neo4j_username: str = "neo4j"
     neo4j_password: str = ""
 
     # LLM provider selection: "ollama" (local dev, default) or "groq" (deployment).

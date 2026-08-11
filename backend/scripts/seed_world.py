@@ -458,7 +458,7 @@ async def _summary(tx: AsyncManagedTransaction) -> dict[str, Any]:
 async def main() -> None:
     settings = get_settings()
     driver = AsyncGraphDatabase.driver(
-        settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password)
+        settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
     )
     try:
         await run_migrations(driver)
