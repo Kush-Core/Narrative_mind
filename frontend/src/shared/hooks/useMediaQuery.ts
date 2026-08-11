@@ -26,6 +26,4 @@ export function useMediaQuery(query: string): boolean {
 export const BREAKPOINT = {
   /** Below this the explorer becomes an overlay instead of a fixed panel. */
   compact: "(max-width: 1023px)",
-  /** Below this the auxiliary inspector panel is not offered at all. */
-  narrow: "(max-width: 1279px)",
 } as const

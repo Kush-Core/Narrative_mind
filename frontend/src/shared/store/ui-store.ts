@@ -23,39 +23,35 @@ import { persist } from "zustand/middleware"
 export interface PanelSizes {
   explorer: number
   main: number
-  aux: number
 }
 
-export const DEFAULT_PANEL_SIZES: PanelSizes = { explorer: 18, main: 60, aux: 22 }
+export const DEFAULT_PANEL_SIZES: PanelSizes = { explorer: 18, main: 82 }
 
 interface UiState {
   sidebarCollapsed: boolean
-  auxPanelOpen: boolean
   commandPaletteOpen: boolean
   panelSizes: PanelSizes
 
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
-  toggleAuxPanel: () => void
-  setAuxPanelOpen: (open: boolean) => void
   setCommandPaletteOpen: (open: boolean) => void
   toggleCommandPalette: () => void
   setPanelSizes: (sizes: PanelSizes) => void
   resetLayout: () => void
 }
 
+/** The slice of {@link UiState} that survives a reload — see `partialize`. */
+type PersistedUiState = Pick<UiState, "sidebarCollapsed" | "panelSizes">
+
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
       sidebarCollapsed: false,
-      auxPanelOpen: false,
       commandPaletteOpen: false,
       panelSizes: DEFAULT_PANEL_SIZES,
 
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
-      toggleAuxPanel: () => set((state) => ({ auxPanelOpen: !state.auxPanelOpen })),
-      setAuxPanelOpen: (auxPanelOpen) => set({ auxPanelOpen }),
       setCommandPaletteOpen: (commandPaletteOpen) => set({ commandPaletteOpen }),
       toggleCommandPalette: () =>
         set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
@@ -64,15 +60,33 @@ export const useUiStore = create<UiState>()(
         set({
           panelSizes: DEFAULT_PANEL_SIZES,
           sidebarCollapsed: false,
-          auxPanelOpen: false,
         }),
     }),
     {
       name: "narrative-mind:workspace-layout",
+      // v0 stored a third `aux` panel for the auxiliary inspector, which no
+      // longer exists. Its width has to be dropped rather than merely ignored:
+      // the stored map is handed to the panel group as its default layout, and
+      // a size for a panel id that is not rendered leaves the layout short of
+      // 100%. The explorer keeps its width and main absorbs the rest.
+      version: 1,
+      migrate: (persisted, version) => {
+        if (version >= 1) return persisted as PersistedUiState
+
+        const legacy = (persisted ?? {}) as {
+          sidebarCollapsed?: boolean
+          panelSizes?: Partial<PanelSizes>
+        }
+        const explorer = legacy.panelSizes?.explorer ?? DEFAULT_PANEL_SIZES.explorer
+
+        return {
+          sidebarCollapsed: legacy.sidebarCollapsed ?? false,
+          panelSizes: { explorer, main: 100 - explorer },
+        }
+      },
       // Only geometry survives a reload; transient overlays start closed.
       partialize: (state) => ({
         sidebarCollapsed: state.sidebarCollapsed,
-        auxPanelOpen: state.auxPanelOpen,
         panelSizes: state.panelSizes,
       }),
     },

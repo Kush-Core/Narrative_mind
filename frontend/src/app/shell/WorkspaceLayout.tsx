@@ -3,7 +3,6 @@ import type { Layout, LayoutChangedMeta } from "react-resizable-panels"
 import { Outlet } from "react-router-dom"
 
 import { CommandProvider } from "@/app/providers/command-provider"
-import { AuxPanel } from "@/app/shell/AuxPanel"
 import { CommandBar } from "@/app/shell/CommandBar"
 import { ExplorerSidebar } from "@/app/shell/ExplorerSidebar"
 import { StatusBar } from "@/app/shell/StatusBar"
@@ -13,29 +12,26 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/shared/u
 
 /**
  * The persistent desktop chrome (docs/frontend/COMPONENT_HIERARCHY.md §7):
- * command bar on top, a resizable explorer | main | inspector split in the
- * middle, status bar below, palette over everything.
+ * command bar on top, a resizable explorer | main split in the middle, status
+ * bar below, palette over everything.
  *
  * It owns the workspace regions and their geometry, and knows nothing about
  * what renders inside them — routes arrive through `<Outlet/>`. Panel sizes
  * persist through the UI store, so the workspace reopens as it was left.
  *
  * **Responsive behaviour is desktop-first and structural, not adaptive-mobile:**
- * below `xl` the inspector is not offered (a three-way split stops being useful),
- * and below `lg` the explorer drops to its icon rail. The workspace stays itself
- * at every width rather than becoming a different, phone-shaped product.
+ * below `lg` the explorer drops to its icon rail. The workspace stays itself at
+ * every width rather than becoming a different, phone-shaped product.
  */
 
 /** Panel ids double as the keys of the persisted layout map. */
-const PANEL_ID = { explorer: "explorer", main: "main", aux: "aux" } as const
+const PANEL_ID = { explorer: "explorer", main: "main" } as const
 
 export function WorkspaceLayout() {
   const compact = useMediaQuery(BREAKPOINT.compact)
-  const narrow = useMediaQuery(BREAKPOINT.narrow)
 
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed)
   const setSidebarCollapsed = useUiStore((state) => state.setSidebarCollapsed)
-  const auxPanelOpen = useUiStore((state) => state.auxPanelOpen)
   const panelSizes = useUiStore((state) => state.panelSizes)
   const setPanelSizes = useUiStore((state) => state.setPanelSizes)
 
@@ -45,7 +41,6 @@ export function WorkspaceLayout() {
     if (compact) setSidebarCollapsed(true)
   }, [compact, setSidebarCollapsed])
 
-  const showAuxPanel = auxPanelOpen && !narrow
   const showExplorerPanel = !sidebarCollapsed
 
   function handleLayoutChanged(layout: Layout, meta: LayoutChangedMeta) {
@@ -55,18 +50,16 @@ export function WorkspaceLayout() {
 
     const explorer = layout[PANEL_ID.explorer]
     const main = layout[PANEL_ID.main]
-    const aux = layout[PANEL_ID.aux]
     setPanelSizes({
       explorer: explorer ?? panelSizes.explorer,
       main: main ?? panelSizes.main,
-      aux: aux ?? panelSizes.aux,
     })
   }
 
   return (
     <CommandProvider>
       <div className="grid h-dvh grid-rows-[auto_1fr_auto] overflow-hidden bg-background text-foreground">
-        <CommandBar auxPanelAvailable={!narrow} />
+        <CommandBar />
 
         {/* `min-w-0` alongside `min-h-0`: as a grid item this row defaults to
             `min-width: auto`, so it sized to the panel group's min-content —
@@ -85,7 +78,7 @@ export function WorkspaceLayout() {
           <ResizablePanelGroup
             // Remounting on structural change lets each arrangement start from
             // the stored sizes instead of inheriting the previous one's.
-            key={`${showExplorerPanel}-${showAuxPanel}`}
+            key={`${showExplorerPanel}`}
             orientation="horizontal"
             className="min-h-0 flex-1"
             defaultLayout={{ ...DEFAULT_PANEL_SIZES, ...panelSizes }}
@@ -110,20 +103,6 @@ export function WorkspaceLayout() {
                 <Outlet />
               </main>
             </ResizablePanel>
-
-            {showAuxPanel ? (
-              <>
-                <ResizableHandle withHandle />
-                <ResizablePanel
-                  id={PANEL_ID.aux}
-                  defaultSize={`${panelSizes.aux}`}
-                  minSize="16"
-                  maxSize="40"
-                >
-                  <AuxPanel />
-                </ResizablePanel>
-              </>
-            ) : null}
           </ResizablePanelGroup>
         </div>
 

@@ -1,4 +1,4 @@
-import { PanelLeftIcon, PanelRightIcon, RotateCcwIcon, SearchIcon } from "lucide-react"
+import { PanelLeftIcon, RotateCcwIcon, SearchIcon } from "lucide-react"
 import { type ReactNode, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -22,7 +22,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const togglePalette = useUiStore((state) => state.toggleCommandPalette)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
-  const toggleAuxPanel = useUiStore((state) => state.toggleAuxPanel)
   const resetLayout = useUiStore((state) => state.resetLayout)
 
   const commands = useMemo<Command[]>(
@@ -55,15 +54,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         run: toggleSidebar,
       },
       {
-        id: "workspace.toggle-inspector",
-        label: "Toggle inspector",
-        group: "workspace",
-        icon: PanelRightIcon,
-        shortcut: "mod+i",
-        keywords: ["aux", "details", "panel"],
-        run: toggleAuxPanel,
-      },
-      {
         id: "workspace.reset-layout",
         label: "Reset layout",
         group: "workspace",
@@ -72,7 +62,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         run: resetLayout,
       },
     ],
-    [navigate, togglePalette, toggleSidebar, toggleAuxPanel, resetLayout],
+    [navigate, togglePalette, toggleSidebar, resetLayout],
   )
 
   useRegisterCommands(commands)

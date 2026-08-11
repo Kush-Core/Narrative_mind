@@ -446,8 +446,6 @@ AppRoot (providers + error boundary)
    │     ├─ EntityListPage / EntityDetailPage
    │     ├─ GraphExplorerPage
    │     └─ OverviewPage
-   ├─ AuxPanel            (right, optional) detail/inspector when a master/detail
-   │                                        split is active
    ├─ StatusBar           (bottom)        /health indicator + environment + status
    └─ CommandPalette      (overlay)       Cmd/Ctrl-K, bound to the command registry
 ```
