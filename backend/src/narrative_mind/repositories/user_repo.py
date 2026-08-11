@@ -65,8 +65,8 @@ class UserRepository:
 
     @staticmethod
     async def _get_by_id_tx(
-    tx: AsyncManagedTransaction,
-    user_id: str,
+        tx: AsyncManagedTransaction,
+        user_id: str,
     ) -> dict[str, Any] | None:
         query = """
         MATCH (u:User {id: $user_id})

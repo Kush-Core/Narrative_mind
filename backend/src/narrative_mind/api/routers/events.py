@@ -35,9 +35,7 @@ async def list_events(
 
 
 @router.get("/{event_id}", response_model=Event)
-async def get_event(
-    event_id: str, svc: EventService_Dep, current_user: CurrentUserDep
-) -> Event:
+async def get_event(event_id: str, svc: EventService_Dep, current_user: CurrentUserDep) -> Event:
     return await svc.get(event_id)
 
 
@@ -49,7 +47,5 @@ async def update_event(
 
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_event(
-    event_id: str, svc: EventService_Dep, current_user: CurrentUserDep
-) -> None:
+async def delete_event(event_id: str, svc: EventService_Dep, current_user: CurrentUserDep) -> None:
     await svc.delete(event_id)

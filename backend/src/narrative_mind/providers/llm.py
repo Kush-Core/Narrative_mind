@@ -62,9 +62,7 @@ class GroqProvider:
         messages = ([{"role": "system", "content": system}] if system else []) + [
             {"role": "user", "content": prompt}
         ]
-        resp = await self._client.chat.completions.create(
-            model=self._chat_model, messages=messages
-        )
+        resp = await self._client.chat.completions.create(model=self._chat_model, messages=messages)
         return resp.choices[0].message.content or ""
 
     async def generate_structured(
