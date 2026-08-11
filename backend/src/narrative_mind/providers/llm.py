@@ -1,5 +1,6 @@
 from typing import Any, Protocol
 
+from groq import AsyncGroq
 from ollama import AsyncClient
 
 from narrative_mind.core.config import Settings
@@ -44,3 +45,42 @@ class OllamaProvider:
     async def embed(self, texts: list[str]) -> list[list[float]]:
         resp = await self._client.embed(model=self._embed_model, input=texts)
         return [list(embedding) for embedding in resp.embeddings]
+
+
+class GroqProvider:
+    """LLMProvider backed by the hosted Groq API.
+
+    Used in deployment (Vercel functions have no local model to talk to);
+    local development uses OllamaProvider instead. See backend/README.md.
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        self._client = AsyncGroq(api_key=settings.groq_api_key)
+        self._chat_model = settings.groq_chat_model
+
+    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+        messages = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": "user", "content": prompt}
+        ]
+        resp = await self._client.chat.completions.create(
+            model=self._chat_model, messages=messages
+        )
+        return resp.choices[0].message.content or ""
+
+    async def generate_structured(
+        self, prompt: str, schema: dict[str, Any], *, system: str | None = None
+    ) -> str:
+        # Groq only supports {"type": "json_object"}, not schema-constrained output —
+        # the prompt itself must spell out the shape (ai_service.py already does).
+        messages = ([{"role": "system", "content": system}] if system else []) + [
+            {"role": "user", "content": prompt}
+        ]
+        resp = await self._client.chat.completions.create(
+            model=self._chat_model,
+            messages=messages,
+            response_format={"type": "json_object"},
+        )
+        return resp.choices[0].message.content or ""
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        raise NotImplementedError("Groq has no embeddings endpoint; unused by this app.")

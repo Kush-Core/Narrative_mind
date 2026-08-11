@@ -14,10 +14,18 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
 
-    # Ollama (used from Phase 10)
+    # LLM provider selection: "ollama" (local dev, default) or "groq" (deployment).
+    # See backend/README.md for how/when to switch this.
+    llm_provider: str = "ollama"
+
+    # Ollama (used from Phase 10) — local development only
     ollama_host: str = "http://localhost:11434"
     ollama_chat_model: str = "llama3.2:3b"
     ollama_embed_model: str = "nomic-embed-text-v2-moe:latest"
+
+    # Groq — hosted provider used in deployment
+    groq_api_key: str = ""
+    groq_chat_model: str = "llama-3.3-70b-versatile"
 
     cors_origins: list[str] = []
 

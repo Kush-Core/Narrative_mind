@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.137.2",
+    "groq>=1.6.0",
     "neo4j>=6.2.0",
     "ollama>=0.6.2",
     "pwdlib[argon2]>=0.3.0",

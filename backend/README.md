@@ -91,6 +91,33 @@ ollama pull llama3.2:3b            # required for /ai/describe and /ai/extract
 ollama pull nomic-embed-text-v2-moe   # optional in V1 (used by RAG in V2)
 ```
 
+## LLM provider: Ollama (local) vs Groq (deployed)
+
+This app supports two interchangeable `LLMProvider` implementations
+(`providers/llm.py`), selected by the `LLM_PROVIDER` env var:
+
+- **`ollama`** (default) — talks to a local Ollama server. This is what
+  `.env.example` ships with and what you should use for local development,
+  per the steps above.
+- **`groq`** — talks to the hosted [Groq](https://console.groq.com) API.
+  This exists solely because the production deployment runs on Vercel
+  serverless functions, which have no persistent process to host a local
+  model against — there is no VPS running Ollama in production. Groq is
+  **deployment-only**; you don't need it (or a Groq account) to develop or
+  run this project locally.
+
+If you forked this repo and only want to run it locally, `LLM_PROVIDER=ollama`
+(the default) is already correct — no changes needed. If your `.env` was
+copied from a deployment config and has `LLM_PROVIDER=groq`, switch back:
+
+1. In `.env`, set `LLM_PROVIDER=ollama` (or delete the line — `ollama` is
+   the default).
+2. Make sure `OLLAMA_HOST`, `OLLAMA_CHAT_MODEL`, and `OLLAMA_EMBED_MODEL`
+   point at your local server (see `.env.example`).
+3. Complete step 4 above (start Ollama, pull the model) if you haven't.
+4. Restart the API — `GROQ_API_KEY` can stay blank; it's only read when
+   `LLM_PROVIDER=groq`.
+
 ## Running the API
 
 ```bash
