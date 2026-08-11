@@ -102,28 +102,54 @@ uv run uvicorn narrative_mind.main:app --reload
 
 ## API surface (V1)
 
-| Method & path | Purpose |
-|---|---|
-| `GET /health` | Liveness probe |
-| `POST /characters` · `GET /characters` | Create · list (pagination/filter/sort) |
-| `GET/PATCH/DELETE /characters/{id}` | Read · partial update · delete |
-| `POST /characters/{id}/relationships` | Link a character to another node |
-| `GET /graph/characters/{id}/network?depth=` | Ego-network traversal |
-| `GET /graph/shortest-path?source=&target=` | Shortest path between two characters |
-| `POST /ai/describe` | Generate a prose description |
-| `POST /ai/extract` | Schema-constrained entity extraction |
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /health` | — | Liveness probe |
+| `POST /auth/register` | — | Create an account |
+| `POST /auth/login` | — | Exchange credentials for a bearer token |
+| `POST /characters` · `GET /characters` | ✓ | Create · list (pagination/filter/sort) |
+| `GET/PATCH/DELETE /characters/{id}` | ✓ | Read · partial update · delete |
+| `POST /characters/{id}/relationships` | ✓ | Link a character to another node |
+| `GET /graph/characters/{id}/network?depth=` | ✓ | Ego-network traversal |
+| `GET /graph/shortest-path?source=&target=` | ✓ | Shortest path between two characters |
+| `POST /ai/describe` | ✓ | Generate a prose description |
+| `POST /ai/extract` | ✓ | Schema-constrained entity extraction |
 
 `/locations`, `/factions`, and `/events` expose the same five CRUD routes as
-`/characters`. List endpoints accept `limit`, `offset`, `name_contains`,
-`sort_by`, `order`, plus one categorical filter each (`status` for characters,
-`region` for locations, `ideology` for factions).
+`/characters` (all ✓ auth). List endpoints accept `limit`, `offset`,
+`name_contains`, `sort_by`, `order`, plus one categorical filter each
+(`status` for characters, `region` for locations, `ideology` for factions).
+
+## Authentication
+
+Every route except `/health` and `/auth/*` requires a JWT bearer token
+(`api/deps.py:get_current_user`, backed by `HTTPBearer`). Register, log in,
+and pass the token on every subsequent request:
+
+```bash
+curl -X POST localhost:8000/auth/register \
+  -H 'content-type: application/json' \
+  -d '{"email":"gm@example.com","password":"correct-horse-battery-staple"}'
+
+TOKEN=$(curl -s -X POST localhost:8000/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"gm@example.com","password":"correct-horse-battery-staple"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
+```
+
+Tokens are signed HS256 and expire after `ACCESS_TOKEN_EXPIRE_MINUTES`
+(default 30). There is no refresh endpoint in V1 — an expired token means
+logging in again.
 
 ## Example requests
+
+Every example below assumes `TOKEN` is set as shown above.
 
 Create a character:
 
 ```bash
 curl -X POST localhost:8000/characters \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -d '{"name":"Aria Vane","status":"alive","aliases":["The Vane"]}'
 ```
@@ -131,16 +157,19 @@ curl -X POST localhost:8000/characters \
 List with filter, sort, and pagination:
 
 ```bash
-curl "localhost:8000/characters?status=alive&sort_by=name&order=desc&limit=10&offset=0"
+curl "localhost:8000/characters?status=alive&sort_by=name&order=desc&limit=10&offset=0" \
+  -H "authorization: Bearer $TOKEN"
 ```
 
 Create a faction and link a character to it (use the ids returned above):
 
 ```bash
 curl -X POST localhost:8000/factions \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' -d '{"name":"Iron Pact","ideology":"Order"}'
 
 curl -X POST localhost:8000/characters/<CHARACTER_ID>/relationships \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -d '{"rel_type":"MEMBER_OF","target_id":"<FACTION_ID>"}'
 ```
@@ -151,18 +180,22 @@ Allowed `rel_type` values: `KNOWS`, `MEMBER_OF`, `LOCATED_IN`, `PARTICIPATED_IN`
 Traverse the graph:
 
 ```bash
-curl "localhost:8000/graph/characters/<CHARACTER_ID>/network?depth=2"
-curl "localhost:8000/graph/shortest-path?source=<ID_A>&target=<ID_B>"
+curl "localhost:8000/graph/characters/<CHARACTER_ID>/network?depth=2" \
+  -H "authorization: Bearer $TOKEN"
+curl "localhost:8000/graph/shortest-path?source=<ID_A>&target=<ID_B>" \
+  -H "authorization: Bearer $TOKEN"
 ```
 
 AI generation and extraction (require Ollama running with the chat model):
 
 ```bash
 curl -X POST localhost:8000/ai/describe \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -d '{"name":"Aria Vane","traits":["cunning","loyal"],"tone":"ominous"}'
 
 curl -X POST localhost:8000/ai/extract \
+  -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -d '{"passage":"Aria Vane, a captain of the Iron Pact, met Borin in the city of Dunhollow."}'
 ```
