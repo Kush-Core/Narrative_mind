@@ -150,9 +150,13 @@ cd frontend && npm run test          # Vitest + MSW, no backend required
 ```
 
 The backend's model tests and AI stub-provider test run standalone; the rest
-execute real Cypher against the configured Neo4j instance. The frontend suite
-covers the API, schema, domain-rule, and graph-model layers with the backend
-mocked at the network boundary; it has no component tests yet.
+execute real Cypher against the configured Neo4j instance. Each of those
+registers its own account and runs inside that account's world, so tests are
+isolated from each other by the same ownership rule that isolates users, and
+each one deletes its accounts and everything they own afterwards — a suite run
+leaves the database exactly as it found it. The frontend suite covers the API,
+schema, domain-rule, and graph-model layers with the backend mocked at the
+network boundary; it has no component tests yet.
 
 ## Layering
 

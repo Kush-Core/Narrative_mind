@@ -2,12 +2,17 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from narrative_mind.tests.conftest import track_account
 
-def test_register_returns_user(unauthenticated_client: TestClient) -> None:
+
+def test_register_returns_user(
+    unauthenticated_client: TestClient, registered_accounts: list[str]
+) -> None:
     email = f"{uuid4().hex}@example.com"
     res = unauthenticated_client.post(
         "/auth/register", json={"email": email, "password": "correct-horse-battery-staple"}
     )
+    track_account(registered_accounts, res)
     assert res.status_code == 201
     body = res.json()
     assert body["email"] == email
@@ -15,11 +20,14 @@ def test_register_returns_user(unauthenticated_client: TestClient) -> None:
     assert "password_hash" not in body
 
 
-def test_register_duplicate_email_conflicts(unauthenticated_client: TestClient) -> None:
+def test_register_duplicate_email_conflicts(
+    unauthenticated_client: TestClient, registered_accounts: list[str]
+) -> None:
     email = f"{uuid4().hex}@example.com"
     payload = {"email": email, "password": "correct-horse-battery-staple"}
 
     first = unauthenticated_client.post("/auth/register", json=payload)
+    track_account(registered_accounts, first)
     assert first.status_code == 201
 
     second = unauthenticated_client.post("/auth/register", json=payload)
@@ -27,10 +35,15 @@ def test_register_duplicate_email_conflicts(unauthenticated_client: TestClient) 
     assert second.json()["error"]["code"] == "conflict"
 
 
-def test_login_returns_bearer_token(unauthenticated_client: TestClient) -> None:
+def test_login_returns_bearer_token(
+    unauthenticated_client: TestClient, registered_accounts: list[str]
+) -> None:
     email = f"{uuid4().hex}@example.com"
     password = "correct-horse-battery-staple"
-    unauthenticated_client.post("/auth/register", json={"email": email, "password": password})
+    track_account(
+        registered_accounts,
+        unauthenticated_client.post("/auth/register", json={"email": email, "password": password}),
+    )
 
     res = unauthenticated_client.post("/auth/login", json={"email": email, "password": password})
     assert res.status_code == 200
@@ -39,10 +52,15 @@ def test_login_returns_bearer_token(unauthenticated_client: TestClient) -> None:
     assert body["access_token"]
 
 
-def test_login_wrong_password_rejected(unauthenticated_client: TestClient) -> None:
+def test_login_wrong_password_rejected(
+    unauthenticated_client: TestClient, registered_accounts: list[str]
+) -> None:
     email = f"{uuid4().hex}@example.com"
-    unauthenticated_client.post(
-        "/auth/register", json={"email": email, "password": "correct-horse-battery-staple"}
+    track_account(
+        registered_accounts,
+        unauthenticated_client.post(
+            "/auth/register", json={"email": email, "password": "correct-horse-battery-staple"}
+        ),
     )
 
     res = unauthenticated_client.post(
