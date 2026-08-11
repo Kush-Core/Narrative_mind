@@ -4,11 +4,22 @@ from neo4j import AsyncManagedTransaction, AsyncSession
 
 
 class LocationRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    """Locations, scoped to one owner.
+
+    Every query in this class filters on `owner_id`, including the reads — an
+    entity belonging to another account is not hidden from the response, it is
+    absent from the match, so it returns as a 404 rather than a 403. The owner
+    arrives at construction time and cannot be omitted; see api/deps.py.
+    """
+
+    def __init__(self, session: AsyncSession, owner_id: str) -> None:
         self._session = session
+        self._owner_id = owner_id
 
     async def create(self, location_data: dict[str, Any]) -> dict[str, Any]:
-        return await self._session.execute_write(self._create_location_tx, location_data)
+        return await self._session.execute_write(
+            self._create_location_tx, {**location_data, "owner_id": self._owner_id}
+        )
 
     @staticmethod
     async def _create_location_tx(
@@ -17,7 +28,8 @@ class LocationRepository:
         query = """
         CREATE (l:Location {
             id: $id, name: $name, region: $region,
-            description: $description, created_at: $created_at
+            description: $description, created_at: $created_at,
+            owner_id: $owner_id
         })
         RETURN l {.*} AS location
         """
@@ -28,28 +40,34 @@ class LocationRepository:
         return record["location"]
 
     async def get(self, location_id: str) -> dict[str, Any] | None:
-        return await self._session.execute_read(self._get_location_tx, location_id)
+        return await self._session.execute_read(self._get_location_tx, location_id, self._owner_id)
 
     @staticmethod
     async def _get_location_tx(
-        tx: AsyncManagedTransaction, location_id: str
+        tx: AsyncManagedTransaction, location_id: str, owner_id: str
     ) -> dict[str, Any] | None:
         query = """
-        MATCH (l:Location {id: $location_id})
+        MATCH (l:Location {id: $location_id, owner_id: $owner_id})
         RETURN l {.*} AS location
         """
-        result = await tx.run(query, location_id=location_id)
+        result = await tx.run(query, location_id=location_id, owner_id=owner_id)
         record = await result.single()
         return record["location"] if record else None
 
     async def delete(self, location_id: str) -> bool:
-        return await self._session.execute_write(self._delete_location_tx, location_id)
+        return await self._session.execute_write(
+            self._delete_location_tx, location_id, self._owner_id
+        )
 
     @staticmethod
-    async def _delete_location_tx(tx: AsyncManagedTransaction, location_id: str) -> bool:
+    async def _delete_location_tx(
+        tx: AsyncManagedTransaction, location_id: str, owner_id: str
+    ) -> bool:
         result = await tx.run(
-            "MATCH (l:Location {id: $id}) DETACH DELETE l RETURN count(l) AS deleted",
+            "MATCH (l:Location {id: $id, owner_id: $owner_id}) DETACH DELETE l "
+            "RETURN count(l) AS deleted",
             id=location_id,
+            owner_id=owner_id,
         )
         record = await result.single()
         if record is None:
@@ -72,16 +90,17 @@ class LocationRepository:
             sort_by = "name"
         order_kw = "DESC" if order.lower() == "desc" else "ASC"
         return await self._session.execute_read(
-            self._list_tx, limit, offset, region, name_contains, sort_by, order_kw
+            self._list_tx, self._owner_id, limit, offset, region, name_contains, sort_by, order_kw
         )
 
     @staticmethod
     async def _list_tx(
-        tx, limit, offset, region, name_contains, sort_by, order_kw
+        tx, owner_id, limit, offset, region, name_contains, sort_by, order_kw
     ) -> tuple[list[dict], int]:
         clauses, params = (
-            [],
+            ["l.owner_id = $owner_id"],
             {
+                "owner_id": owner_id,
                 "limit": limit,
                 "offset": offset,
                 "region": region,
@@ -92,7 +111,7 @@ class LocationRepository:
             clauses.append("l.region = $region")
         if name_contains is not None:
             clauses.append("toLower(l.name) CONTAINS toLower($name_contains)")
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = "WHERE " + " AND ".join(clauses)
 
         # sort_by/order_kw are whitelisted, so interpolation is safe here.
         query = f"""
@@ -113,14 +132,18 @@ class LocationRepository:
         return record["items"], record["total"]
 
     async def update(self, location_id: str, props: dict) -> dict | None:
-        return await self._session.execute_write(self._update_tx, location_id, props)
+        return await self._session.execute_write(
+            self._update_tx, location_id, props, self._owner_id
+        )
 
     @staticmethod
-    async def _update_tx(tx, location_id: str, props: dict) -> dict | None:
+    async def _update_tx(tx, location_id: str, props: dict, owner_id: str) -> dict | None:
         result = await tx.run(
-            "MATCH (l:Location {id:$id}) SET l += $props RETURN l {.*} AS location",
+            "MATCH (l:Location {id:$id, owner_id:$owner_id}) SET l += $props "
+            "RETURN l {.*} AS location",
             id=location_id,
             props=props,
+            owner_id=owner_id,
         )
         record = await result.single()
         return record["location"] if record else None

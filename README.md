@@ -65,27 +65,35 @@ npm run dev             # http://localhost:5173
 ```
 
 Every route except `/health` and `/auth/*` requires a token, so register an
-account from the UI before anything else will load.
+account from the UI before anything else will load. **Registering also gives the
+new account its own copy of the Verge starter world** — 10 characters, 6
+locations, 5 factions, 6 events and the relationships between them — so the first
+screen after signing in is a populated graph rather than an empty one.
 
-**Optional — seed a world to explore.** From `backend/`, with Neo4j running:
+**Resetting a world.** Editing is destructive by design; to put an account's
+world back to the starter state, from `backend/`:
 
 ```bash
-uv run python scripts/seed_world.py
+uv run python scripts/seed_world.py you@example.com
 ```
 
-This **replaces the world** with the Verge worldset — 10 characters, 6 locations,
-5 factions, 6 events, and the relationships between them. Ids are derived from
-slugs, so re-running it reproduces the same graph rather than duplicating nodes.
+That replaces only that account's world. Other accounts and every login,
+including the target's own, are untouched.
 
-It deletes only the four world labels. Registered accounts are `:User` nodes in
-the same database and are left untouched, so the script is safe to re-run
-against a deployed instance — it reports the account count it preserved. Any
-entities you created by hand are part of the world and *are* replaced.
+Set `SEED_NEW_USER_WORLD=false` to have accounts start empty instead. The test
+suite does exactly that — a world arriving unasked is indistinguishable from data
+a test created.
 
 ## What is implemented
 
 - **Auth** — register, log in, HS256 bearer tokens; every route but `/health`
   and `/auth/*` is protected. No refresh endpoint in V1.
+- **Per-account worlds** — every entity carries an `owner_id` and every query
+  filters on it, so accounts cannot read, edit, delete or traverse into each
+  other's worlds; another account's entity returns 404, not 403. The owner is a
+  constructor argument on the repositories, injected from the token in
+  [`api/deps.py`](backend/src/narrative_mind/api/deps.py), so no service or route
+  passes it and none can forget to.
 - **Entity management** — full CRUD for characters, locations, factions, and
   events, with paginated lists (search, sort, and a categorical filter for the
   types that have one), rendered from a single entity engine on the frontend.
@@ -108,7 +116,8 @@ Also outstanding:
 
 - No UI reaches the `/ai` endpoints — `frontend/src/features/ai/` and
   `features/world/` are reserved, empty slices.
-- No world or campaign switcher; one implicit world per backend instance.
+- One world per account, and no switcher — an account cannot keep two separate
+  worlds or share one with somebody else.
 - The frontend's planned world-overview/global-search milestone (M7) and its
   accessibility and polish pass (M8) are unstarted.
 

@@ -97,6 +97,12 @@ ships, which is called out where the two differ.
 | `JWT_ALGORITHM` | Token signing algorithm | `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token lifetime in minutes | `30` |
 
+**Worlds**
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `SEED_NEW_USER_WORLD` | Give each new account its own copy of the starter world at registration, so a first login opens onto a populated graph. Set `false` for empty accounts — the test suite does, since a world arriving unasked is indistinguishable from data a test created | `true` |
+
 `.env` is gitignored; never commit real secrets. The `.env.example` values for
 `GROQ_API_KEY` and `JWT_SECRET_KEY` are placeholders, not working credentials.
 
@@ -202,6 +208,30 @@ TOKEN=$(curl -s -X POST localhost:8000/auth/login \
 Tokens are signed HS256 and expire after `ACCESS_TOKEN_EXPIRE_MINUTES`
 (default 30). There is no refresh endpoint in V1 — an expired token means
 logging in again.
+
+### Worlds are per account
+
+Registering creates the account **and** its own copy of the starter world (27
+entities, 69 relationships), so the token above already has a graph behind it.
+
+Every entity node carries an `owner_id`, and the four entity repositories plus
+`GraphRepository` are constructed with the authenticated user's id and filter
+every query by it. Nothing above the repository layer passes an owner or knows
+one exists: `get_*_repository` in `api/deps.py` injects it, which also means a
+repository cannot be built without a valid token, and no method added later can
+forget to scope itself.
+
+Consequences worth knowing:
+
+- Another account's entity responds **404, not 403** — it is absent from the
+  match rather than hidden from the response, which is the answer that reveals
+  least.
+- Relationships cannot cross accounts. `POST /characters/{id}/relationships`
+  requires both endpoints to be yours, which is what keeps the graph partitioned
+  and traversals unable to walk out of your own world.
+- `owner_id` is on the node but not in any response body, so the API contract is
+  the same as before ownership existed.
+- To reset an account's world: `uv run python scripts/seed_world.py <email>`.
 
 ## Example requests
 

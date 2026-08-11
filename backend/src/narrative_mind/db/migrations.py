@@ -13,6 +13,12 @@ INDEXES = [
     "CREATE INDEX character_name IF NOT EXISTS FOR (c:Character) ON (c.name)",
     "CREATE INDEX location_name  IF NOT EXISTS FOR (l:Location)  ON (l.name)",
     "CREATE INDEX faction_name   IF NOT EXISTS FOR (f:Faction)   ON (f.name)",
+    # Every entity read filters on owner_id (see api/deps.py), so without these
+    # each list query would scan every account's nodes to return one account's.
+    "CREATE INDEX character_owner IF NOT EXISTS FOR (c:Character) ON (c.owner_id)",
+    "CREATE INDEX location_owner  IF NOT EXISTS FOR (l:Location)  ON (l.owner_id)",
+    "CREATE INDEX faction_owner   IF NOT EXISTS FOR (f:Faction)   ON (f.owner_id)",
+    "CREATE INDEX event_owner     IF NOT EXISTS FOR (e:Event)     ON (e.owner_id)",
 ]
 
 

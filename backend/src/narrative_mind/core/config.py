@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
+    # Give each new account its own copy of the starter world at registration, so
+    # a first login opens onto a populated graph instead of an empty one. Turn it
+    # off to have accounts start empty — the test suite does, since a world that
+    # arrives unasked would be indistinguishable from data a test created.
+    seed_new_user_world: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:
