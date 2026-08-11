@@ -73,10 +73,14 @@ account from the UI before anything else will load.
 uv run python scripts/seed_world.py
 ```
 
-This **wipes the graph** and rebuilds it as the Verge worldset — 10 characters,
-6 locations, 5 factions, 6 events, and the relationships between them. Ids are
-derived from slugs, so re-running it reproduces the same graph rather than
-duplicating nodes.
+This **replaces the world** with the Verge worldset — 10 characters, 6 locations,
+5 factions, 6 events, and the relationships between them. Ids are derived from
+slugs, so re-running it reproduces the same graph rather than duplicating nodes.
+
+It deletes only the four world labels. Registered accounts are `:User` nodes in
+the same database and are left untouched, so the script is safe to re-run
+against a deployed instance — it reports the account count it preserved. Any
+entities you created by hand are part of the world and *are* replaced.
 
 ## What is implemented
 

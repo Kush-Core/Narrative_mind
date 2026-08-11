@@ -1,7 +1,11 @@
-"""Wipe the graph and seed it with the Verge worldset.
+"""Rebuild the world as the Verge worldset.
 
 Usage (from backend/):
     uv run python scripts/seed_world.py
+
+Only the four world labels are replaced. User accounts share this database as
+`:User` nodes and are left alone, so the script is safe to re-run against a
+deployed instance without signing every registered account out of existence.
 
 Entity ids are uuid5-derived from their slug, so re-running the script produces
 the same graph rather than a new set of nodes.
@@ -18,6 +22,10 @@ from narrative_mind.core.config import get_settings
 from narrative_mind.db.migrations import run_migrations
 
 NAMESPACE = UUID("6f9b1c1e-0f4a-5c3d-9e2b-7a1d4f8c2b60")
+
+# Everything this script owns. Any label absent from this tuple — `:User` today —
+# is outside the script's remit and is never read or written by it.
+WORLD_LABELS = ("Character", "Location", "Faction", "Event")
 
 
 def eid(slug: str) -> str:
@@ -342,10 +350,23 @@ KNOWS = [
 ]
 
 
-async def _wipe(tx: AsyncManagedTransaction) -> int:
-    result = await tx.run("MATCH (n) DETACH DELETE n RETURN count(n) AS removed")
-    record = await result.single()
-    return int(record["removed"]) if record else 0
+async def _wipe_world(tx: AsyncManagedTransaction) -> dict[str, int]:
+    """Delete the world, and only the world.
+
+    One statement per label rather than `MATCH (n) DETACH DELETE n`, for two
+    reasons. Accounts are `:User` nodes in this same database, so the unscoped
+    form deletes every registered login along with the world — recoverable
+    locally, not recoverable on a deployed instance. And each statement here is
+    served by that label's index instead of scanning the whole node store, so
+    the delete stays quick however much unrelated data accumulates.
+    """
+    removed: dict[str, int] = {}
+    for label in WORLD_LABELS:
+        # label comes from WORLD_LABELS, never from input; nothing else is interpolated.
+        result = await tx.run(f"MATCH (n:{label}) DETACH DELETE n RETURN count(n) AS removed")
+        record = await result.single()
+        removed[label] = int(record["removed"]) if record else 0
+    return removed
 
 
 async def _seed_nodes(tx: AsyncManagedTransaction) -> None:
@@ -447,11 +468,25 @@ async def _seed_edges(tx: AsyncManagedTransaction) -> None:
 
 
 async def _summary(tx: AsyncManagedTransaction) -> dict[str, Any]:
-    nodes = await tx.run("MATCH (n) RETURN labels(n)[0] AS label, count(*) AS c ORDER BY label")
+    nodes: dict[str, int] = {}
+    for label in WORLD_LABELS:
+        # label comes from WORLD_LABELS, never from input; nothing else is interpolated.
+        result = await tx.run(f"MATCH (n:{label}) RETURN count(n) AS c")
+        record = await result.single()
+        nodes[label] = int(record["c"]) if record else 0
+
     edges = await tx.run("MATCH ()-[r]->() RETURN type(r) AS rel, count(*) AS c ORDER BY rel")
+    edge_counts = {r["rel"]: r["c"] async for r in edges}
+
+    # Reported so a run against a deployed instance visibly confirms it left the
+    # logins alone, rather than the operator having to go and check.
+    accounts = await tx.run("MATCH (u:User) RETURN count(u) AS c")
+    account_record = await accounts.single()
+
     return {
-        "nodes": {r["label"]: r["c"] async for r in nodes},
-        "edges": {r["rel"]: r["c"] async for r in edges},
+        "nodes": nodes,
+        "edges": edge_counts,
+        "accounts": int(account_record["c"]) if account_record else 0,
     }
 
 
@@ -463,13 +498,14 @@ async def main() -> None:
     try:
         await run_migrations(driver)
         async with driver.session() as session:
-            removed = await session.execute_write(_wipe)
-            print(f"removed {removed} existing nodes")
+            removed = await session.execute_write(_wipe_world)
+            print(f"removed {sum(removed.values())} existing world nodes:", removed)
             await session.execute_write(_seed_nodes)
             await session.execute_write(_seed_edges)
             stats = await session.execute_read(_summary)
         print("nodes:", stats["nodes"])
         print("edges:", stats["edges"])
+        print(f"user accounts left untouched: {stats['accounts']}")
     finally:
         await driver.close()
 
