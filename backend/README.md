@@ -227,6 +227,62 @@ curl -X POST localhost:8000/ai/extract \
   -d '{"passage":"Aria Vane, a captain of the Iron Pact, met Borin in the city of Dunhollow."}'
 ```
 
+## Deployment (Vercel + Neo4j Aura + Groq)
+
+Production runs the backend as Vercel serverless functions, backed by a
+managed Neo4j Aura instance and Groq for the `/ai` endpoints (see
+[LLM provider](#llm-provider-ollama-local-vs-groq-deployed) above for why
+Ollama isn't used in production).
+
+**One-time setup:**
+
+1. **Neo4j** — create a free instance at
+   [console.neo4j.io](https://console.neo4j.io) (AuraDB Free). Save the
+   generated `NEO4J_URI` (`neo4j+s://...`), username, and password.
+2. **Groq** — create an API key at
+   [console.groq.com](https://console.groq.com).
+3. **Vercel project** — import this repo, set **Root Directory** to
+   `backend`. The repo already includes `backend/vercel.json` (routes all
+   requests to the FastAPI `app`) and `backend/requirements.txt` (pinned
+   deps, since Vercel's Python builder doesn't read `uv.lock` — regenerate
+   it after dependency changes with
+   `uv export --no-hashes --no-dev -o requirements.txt`).
+4. **Environment variables** — set these in the Vercel project's
+   **Settings → Environment Variables** (they are separate from your local
+   `.env` and from the frontend Vercel project's variables):
+
+   | Variable | Value |
+   |---|---|
+   | `NEO4J_URI` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` | from the Aura instance |
+   | `LLM_PROVIDER` | `groq` |
+   | `GROQ_API_KEY` | from console.groq.com |
+   | `GROQ_CHAT_MODEL` | `llama-3.3-70b-versatile` |
+   | `JWT_SECRET_KEY` | a real random value, e.g. `openssl rand -hex 32` — never the `.env.example` placeholder |
+   | `JWT_ALGORITHM` | `HS256` |
+   | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` |
+   | `CORS_ORIGINS` | JSON array of the deployed **frontend** origin, e.g. `["https://your-app.vercel.app"]` |
+   | `ENVIRONMENT` / `DEBUG` | `production` / `false` |
+
+5. Deploy. Vercel auto-suggests env var names it finds in `.env.example`
+   files anywhere in the repo — including the frontend's `VITE_*` vars —
+   when setting up a project; ignore/delete any that don't belong to this
+   project rather than filling them in.
+
+**Gotchas hit in practice, worth checking first if something breaks:**
+
+- **CORS preflight fails (400 on `OPTIONS`)** — `CORS_ORIGINS` must be
+  valid JSON (`["https://exact-origin.vercel.app"]`, matching scheme and
+  no trailing slash) and must be redeployed after editing; env var changes
+  don't apply to already-built deployments.
+- **`/ai/*` routes fail in production but the Groq key works via curl** —
+  confirm `LLM_PROVIDER` is set to lowercase `groq` in the Vercel env vars
+  (the app normalizes case, but double-check nothing else is misspelled)
+  and that you redeployed after adding the env vars.
+- **Frontend loads blank** — check the browser console first; a blank page
+  with no console error usually means the build output/routing is fine and
+  the real failure is a backend call failing (CORS, wrong
+  `VITE_API_BASE_URL`, etc.), not the frontend itself.
+
 ## Development
 
 Lint, format, and test:

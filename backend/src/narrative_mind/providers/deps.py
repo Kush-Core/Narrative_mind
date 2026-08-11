@@ -20,7 +20,7 @@ def _build_groq_provider(api_key: str, chat: str) -> GroqProvider:
 
 
 def get_llm(settings: Annotated[Settings, Depends(get_settings)]) -> LLMProvider:
-    if settings.llm_provider == "groq":
+    if settings.llm_provider.strip().lower() == "groq":
         return _build_groq_provider(settings.groq_api_key, settings.groq_chat_model)
     return _build_ollama_provider(
         settings.ollama_host, settings.ollama_chat_model, settings.ollama_embed_model

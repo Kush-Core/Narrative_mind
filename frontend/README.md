@@ -75,6 +75,27 @@ Every item below is wired end-to-end against a live backend route:
 - There is no world/campaign switcher — the app currently operates on a
   single implicit world per backend instance.
 
+## Deployment (Vercel)
+
+1. Vercel dashboard → **Add New Project** → import this repo → set
+   **Root Directory** to `frontend`.
+2. Framework preset **Vite** (auto-detected). Build command `npm run build`,
+   output directory `dist`.
+3. Set env var `VITE_API_BASE_URL` to the deployed **backend**'s URL (see
+   [`../backend/README.md`](../backend/README.md#deployment-vercel--neo4j-aura--groq)).
+   Only `VITE_`-prefixed vars are read by the build — Vercel may suggest
+   backend-only vars it found in `backend/.env.example` elsewhere in the
+   repo; ignore/delete those here, they don't belong to this project.
+4. Deploy. Then go back to the **backend** project's `CORS_ORIGINS` env var
+   and set it to this frontend's exact deployed origin (JSON array,
+   matching scheme, no trailing slash), and redeploy the backend — CORS
+   preflight requests will otherwise fail with a 400 on login/register.
+
+If the deployed page loads blank, check the browser console first: no
+console error usually means the static build/routing is fine and the real
+issue is a failed backend call (CORS, stale `VITE_API_BASE_URL`) rather
+than the frontend itself.
+
 ## Testing
 
 ```bash
