@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # Groq — hosted provider used in deployment
     groq_api_key: str = ""
-    groq_chat_model: str = "llama-3.3-70b-versatile"
+    groq_chat_model: str = "openai/gpt-oss-120b"
 
     cors_origins: list[str] = []
 

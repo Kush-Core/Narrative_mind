@@ -70,15 +70,24 @@ class GroqProvider:
     async def generate_structured(
         self, prompt: str, schema: dict[str, Any], *, system: str | None = None
     ) -> str:
-        # Groq only supports {"type": "json_object"}, not schema-constrained output —
-        # the prompt itself must spell out the shape (ai_service.py already does).
+        # json_schema (best-effort mode) is only supported by the openai/gpt-oss-*
+        # models — see GROQ_CHAT_MODEL in config.py. strict mode is not used here
+        # since it requires every field marked "required" and additionalProperties:
+        # false recursively, which Pydantic's auto-generated schema doesn't set;
+        # ai_service.py re-validates the result through Pydantic regardless.
         messages = ([{"role": "system", "content": system}] if system else []) + [
             {"role": "user", "content": prompt}
         ]
         resp = await self._client.chat.completions.create(
             model=self._chat_model,
             messages=messages,
-            response_format={"type": "json_object"},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.get("title", "structured_response"),
+                    "schema": schema,
+                },
+            },
         )
         return resp.choices[0].message.content or ""
 

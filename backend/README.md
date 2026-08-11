@@ -256,7 +256,7 @@ Ollama isn't used in production).
    | `NEO4J_URI` / `NEO4J_USERNAME` / `NEO4J_PASSWORD` | from the Aura instance |
    | `LLM_PROVIDER` | `groq` |
    | `GROQ_API_KEY` | from console.groq.com |
-   | `GROQ_CHAT_MODEL` | `llama-3.3-70b-versatile` |
+   | `GROQ_CHAT_MODEL` | `openai/gpt-oss-120b` |
    | `JWT_SECRET_KEY` | a real random value, e.g. `openssl rand -hex 32` — never the `.env.example` placeholder |
    | `JWT_ALGORITHM` | `HS256` |
    | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` |
