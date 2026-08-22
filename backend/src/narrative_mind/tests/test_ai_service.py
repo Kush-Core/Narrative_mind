@@ -21,9 +21,6 @@ class _FakeLLM:
     ) -> str:
         return self.payload
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        raise AssertionError("embed should not be called in this test")
-
 
 class _StubLLM:
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
@@ -33,9 +30,6 @@ class _StubLLM:
         self, prompt: str, schema: dict[str, object], *, system: str | None = None
     ) -> str:
         return '{"entities":[],"relationships":[]}'
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        return [[0.0] * 768 for _ in texts]
 
 
 def test_extract_filters_invalid_relationships() -> None:

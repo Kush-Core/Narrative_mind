@@ -31,7 +31,7 @@ class EventRepository:
             timeline_order: $timeline_order, created_at: $created_at,
             owner_id: $owner_id
         })
-        RETURN e {.*} AS event
+        RETURN e {.id, .name, .summary, .timeline_order, .created_at} AS event
         """
         result = await tx.run(query, **event_data)
         record = await result.single()
@@ -48,7 +48,7 @@ class EventRepository:
     ) -> dict[str, Any] | None:
         query = """
         MATCH (e:Event {id: $event_id, owner_id: $owner_id})
-        RETURN e {.*} AS event
+        RETURN e {.id, .name, .summary, .timeline_order, .created_at} AS event
         """
         result = await tx.run(query, event_id=event_id, owner_id=owner_id)
         record = await result.single()
@@ -116,7 +116,7 @@ class EventRepository:
         WITH e, total
         ORDER BY e.{sort_by} {order_kw}
         SKIP $offset LIMIT $limit
-        RETURN collect(e {{.*}}) AS items, total
+        RETURN collect(e {{.id, .name, .summary, .timeline_order, .created_at}}) AS items, total
         """
         result = await tx.run(query, **params)
         record = await result.single()
@@ -130,7 +130,8 @@ class EventRepository:
     @staticmethod
     async def _update_tx(tx, event_id: str, props: dict, owner_id: str) -> dict | None:
         result = await tx.run(
-            "MATCH (e:Event {id:$id, owner_id:$owner_id}) SET e += $props RETURN e {.*} AS event",
+            "MATCH (e:Event {id:$id, owner_id:$owner_id}) SET e += $props "
+            "RETURN e {.id, .name, .summary, .timeline_order, .created_at} AS event",
             id=event_id,
             props=props,
             owner_id=owner_id,

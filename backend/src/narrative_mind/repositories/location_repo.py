@@ -31,7 +31,7 @@ class LocationRepository:
             description: $description, created_at: $created_at,
             owner_id: $owner_id
         })
-        RETURN l {.*} AS location
+        RETURN l {.id, .name, .region, .description, .created_at} AS location
         """
         result = await tx.run(query, **location_data)
         record = await result.single()
@@ -48,7 +48,7 @@ class LocationRepository:
     ) -> dict[str, Any] | None:
         query = """
         MATCH (l:Location {id: $location_id, owner_id: $owner_id})
-        RETURN l {.*} AS location
+        RETURN l {.id, .name, .region, .description, .created_at} AS location
         """
         result = await tx.run(query, location_id=location_id, owner_id=owner_id)
         record = await result.single()
@@ -123,7 +123,7 @@ class LocationRepository:
         WITH l, total
         ORDER BY l.{sort_by} {order_kw}
         SKIP $offset LIMIT $limit
-        RETURN collect(l {{.*}}) AS items, total
+        RETURN collect(l {{.id, .name, .region, .description, .created_at}}) AS items, total
         """
         result = await tx.run(query, **params)
         record = await result.single()
@@ -140,7 +140,7 @@ class LocationRepository:
     async def _update_tx(tx, location_id: str, props: dict, owner_id: str) -> dict | None:
         result = await tx.run(
             "MATCH (l:Location {id:$id, owner_id:$owner_id}) SET l += $props "
-            "RETURN l {.*} AS location",
+            "RETURN l {.id, .name, .region, .description, .created_at} AS location",
             id=location_id,
             props=props,
             owner_id=owner_id,

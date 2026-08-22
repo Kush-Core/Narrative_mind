@@ -31,7 +31,7 @@ class CharacterRepository:
             status: $status, description: $description, created_at: $created_at,
             owner_id: $owner_id
         })
-        RETURN c {.*} AS character
+        RETURN c {.id, .name, .aliases, .status, .description, .created_at} AS character
         """
         result = await tx.run(query, **character_data)
         record = await result.single()
@@ -50,7 +50,7 @@ class CharacterRepository:
     ) -> dict[str, Any] | None:
         query = """
         MATCH (c:Character {id: $character_id, owner_id: $owner_id})
-        RETURN c {.*} AS character
+        RETURN c {.id, .name, .aliases, .status, .description, .created_at} AS character
         """
         result = await tx.run(query, character_id=character_id, owner_id=owner_id)
         record = await result.single()
@@ -126,7 +126,8 @@ class CharacterRepository:
         WITH c, total
         ORDER BY c.{sort_by} {order_kw}
         SKIP $offset LIMIT $limit
-        RETURN collect(c {{.*}}) AS items, total
+        RETURN collect(c {{.id, .name, .aliases, .status, .description, .created_at}})
+               AS items, total
         """
         result = await tx.run(query, **params)
         record = await result.single()
@@ -143,7 +144,7 @@ class CharacterRepository:
     async def _update_tx(tx, character_id: str, props: dict, owner_id: str) -> dict | None:
         result = await tx.run(
             "MATCH (c:Character {id:$id, owner_id:$owner_id}) SET c += $props "
-            "RETURN c {.*} AS character",
+            "RETURN c {.id, .name, .aliases, .status, .description, .created_at} AS character",
             id=character_id,
             props=props,
             owner_id=owner_id,

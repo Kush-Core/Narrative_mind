@@ -15,17 +15,28 @@ class Settings(BaseSettings):
     neo4j_password: str = ""
 
     # LLM provider selection: "ollama" (local dev, default) or "groq" (deployment).
-    # See backend/README.md for how/when to switch this.
+    # Chat only — independent of embedding_provider below. See backend/README.md.
     llm_provider: str = "ollama"
+
+    # Embedding provider selection: "ollama" (local dev, default) or "google"
+    # (deployment). Independent of llm_provider — Groq has no embeddings endpoint,
+    # so embeddings are a separate provider axis entirely. See backend/README.md.
+    embedding_provider: str = "ollama"
 
     # Ollama (used from Phase 10) — local development only
     ollama_host: str = "http://localhost:11434"
     ollama_chat_model: str = "llama3.2:3b"
     ollama_embed_model: str = "nomic-embed-text-v2-moe:latest"
+    ollama_embed_dimensions: int = 768
 
-    # Groq — hosted provider used in deployment
+    # Groq — hosted chat provider used in deployment
     groq_api_key: str = ""
     groq_chat_model: str = "openai/gpt-oss-120b"
+
+    # Google — hosted embedding provider used in deployment (embedding only, not chat)
+    google_api_key: str = ""
+    google_embed_model: str = ""
+    google_embed_dimensions: int = 768
 
     cors_origins: list[str] = []
 

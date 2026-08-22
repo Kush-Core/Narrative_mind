@@ -31,7 +31,7 @@ class FactionRepository:
             description: $description, created_at: $created_at,
             owner_id: $owner_id
         })
-        RETURN f {.*} AS faction
+        RETURN f {.id, .name, .ideology, .description, .created_at} AS faction
         """
         result = await tx.run(query, **faction_data)
         record = await result.single()
@@ -48,7 +48,7 @@ class FactionRepository:
     ) -> dict[str, Any] | None:
         query = """
         MATCH (f:Faction {id: $faction_id, owner_id: $owner_id})
-        RETURN f {.*} AS faction
+        RETURN f {.id, .name, .ideology, .description, .created_at} AS faction
         """
         result = await tx.run(query, faction_id=faction_id, owner_id=owner_id)
         record = await result.single()
@@ -124,7 +124,7 @@ class FactionRepository:
         WITH f, total
         ORDER BY f.{sort_by} {order_kw}
         SKIP $offset LIMIT $limit
-        RETURN collect(f {{.*}}) AS items, total
+        RETURN collect(f {{.id, .name, .ideology, .description, .created_at}}) AS items, total
         """
         result = await tx.run(query, **params)
         record = await result.single()
@@ -139,7 +139,7 @@ class FactionRepository:
     async def _update_tx(tx, faction_id: str, props: dict, owner_id: str) -> dict | None:
         result = await tx.run(
             "MATCH (f:Faction {id:$id, owner_id:$owner_id}) SET f += $props "
-            "RETURN f {.*} AS faction",
+            "RETURN f {.id, .name, .ideology, .description, .created_at} AS faction",
             id=faction_id,
             props=props,
             owner_id=owner_id,
