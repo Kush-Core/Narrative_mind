@@ -1,3 +1,4 @@
+import hashlib
 from typing import Protocol
 
 from google import genai
@@ -89,3 +90,35 @@ class GoogleEmbeddingProvider:
         if not resp.embeddings or resp.embeddings[0].values is None:
             raise RuntimeError("Google embeddings API returned no embedding")
         return resp.embeddings[0].values
+
+
+class FakeEmbeddingProvider:
+    """Deterministic EmbeddingProvider for tests — no network, no API key.
+
+    The same text always hashes to the same vector, so retrieval assertions
+    stay reproducible, and every create/update in the test suite can go
+    through the real reindex path without touching Ollama or Google.
+    """
+
+    def __init__(self, dimensions: int = 32) -> None:
+        self._dimensions = dimensions
+
+    @property
+    def model_name(self) -> str:
+        return "fake-embedding-v1"
+
+    @property
+    def dimensions(self) -> int:
+        return self._dimensions
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._vector(text) for text in texts]
+
+    async def embed_query(self, text: str) -> list[float]:
+        return self._vector(text)
+
+    def _vector(self, text: str) -> list[float]:
+        digest = hashlib.sha256(text.encode()).digest()
+        repeats = self._dimensions // len(digest) + 1
+        raw = (digest * repeats)[: self._dimensions]
+        return [(byte / 127.5) - 1 for byte in raw]

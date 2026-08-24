@@ -14,6 +14,8 @@ os.environ["SEED_NEW_USER_WORLD"] = "false"
 
 from narrative_mind.core.config import get_settings  # noqa: E402
 from narrative_mind.main import create_app  # noqa: E402
+from narrative_mind.providers.deps import get_embedder  # noqa: E402
+from narrative_mind.providers.embeddings import FakeEmbeddingProvider  # noqa: E402
 
 get_settings.cache_clear()
 
@@ -96,6 +98,13 @@ def register_and_token(c: TestClient, accounts: list[str]) -> str:
 @pytest.fixture
 def unauthenticated_client():
     app = create_app()
+    # Every entity create/update now embeds synchronously (see
+    # services/embedding_service.py), so without this override the suite
+    # would make a real Ollama/Google call on every character/location/
+    # faction/event test — slow, networked, and non-deterministic. The fake
+    # is stable per input text, so nothing that asserts on stored vectors
+    # needs a live provider either.
+    app.dependency_overrides[get_embedder] = FakeEmbeddingProvider
     with TestClient(app) as c:
         yield c
 

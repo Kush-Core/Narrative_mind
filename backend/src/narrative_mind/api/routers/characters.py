@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Query, status
+from fastapi import APIRouter, Query, status
 
 from narrative_mind.api.deps import (
     CharacterService_Dep,
@@ -23,12 +23,9 @@ router = APIRouter(prefix="/characters", tags=["characters"])
 async def create_character(
     payload: CharacterCreate,
     svc: CharacterService_Dep,
-    background_tasks: BackgroundTasks,
     current_user: CurrentUserDep,
 ) -> Character:
-    character = await svc.create(payload)
-    background_tasks.add_task(svc.reindex, character.id)
-    return character
+    return await svc.create(payload)
 
 
 @router.get("", response_model=Page[Character])

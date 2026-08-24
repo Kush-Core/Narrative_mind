@@ -9,8 +9,9 @@ from narrative_mind.core.config import Settings, get_settings
 from narrative_mind.core.security import decode_access_token
 from narrative_mind.db.neo4j import get_session
 from narrative_mind.domain.user import User
-from narrative_mind.providers.deps import LLMDep
+from narrative_mind.providers.deps import EmbedderDep, LLMDep
 from narrative_mind.repositories.character_repo import CharacterRepository
+from narrative_mind.repositories.embedding_repo import EmbeddingRepository
 from narrative_mind.repositories.event_repo import EventRepository
 from narrative_mind.repositories.faction_repo import FactionRepository
 from narrative_mind.repositories.graph_repo import GraphRepository
@@ -19,6 +20,7 @@ from narrative_mind.repositories.user_repo import UserRepository
 from narrative_mind.repositories.world_repo import WorldRepository
 from narrative_mind.services.ai_service import AIService
 from narrative_mind.services.character_service import CharacterService
+from narrative_mind.services.embedding_service import EmbeddingService
 from narrative_mind.services.event_service import EventService
 from narrative_mind.services.faction_service import FactionService
 from narrative_mind.services.graph_service import GraphService
@@ -170,6 +172,26 @@ GraphRepository_Dep = Annotated[
 ]
 
 
+def get_embedding_repository(session: Session_Dep, owner_id: OwnerDep) -> EmbeddingRepository:
+    return EmbeddingRepository(session, owner_id)
+
+
+EmbeddingRepository_Dep = Annotated[
+    EmbeddingRepository,
+    Depends(get_embedding_repository),
+]
+
+
+def get_embedding_service(repo: EmbeddingRepository_Dep, embedder: EmbedderDep) -> EmbeddingService:
+    return EmbeddingService(repo, embedder)
+
+
+EmbeddingService_Dep = Annotated[
+    EmbeddingService,
+    Depends(get_embedding_service),
+]
+
+
 @dataclass
 class Pagination:
     limit: int
@@ -186,8 +208,10 @@ def pagination_params(
 PaginationDep = Annotated[Pagination, Depends(pagination_params)]
 
 
-def get_character_service(repo: CharacterRepository_Dep) -> CharacterService:
-    return CharacterService(repo)
+def get_character_service(
+    repo: CharacterRepository_Dep, embedding_svc: EmbeddingService_Dep
+) -> CharacterService:
+    return CharacterService(repo, embedding_svc)
 
 
 CharacterService_Dep = Annotated[
@@ -196,8 +220,10 @@ CharacterService_Dep = Annotated[
 ]
 
 
-def get_location_service(repo: LocationRepository_Dep) -> LocationService:
-    return LocationService(repo)
+def get_location_service(
+    repo: LocationRepository_Dep, embedding_svc: EmbeddingService_Dep
+) -> LocationService:
+    return LocationService(repo, embedding_svc)
 
 
 LocationService_Dep = Annotated[
@@ -206,8 +232,10 @@ LocationService_Dep = Annotated[
 ]
 
 
-def get_faction_service(repo: FactionRepository_Dep) -> FactionService:
-    return FactionService(repo)
+def get_faction_service(
+    repo: FactionRepository_Dep, embedding_svc: EmbeddingService_Dep
+) -> FactionService:
+    return FactionService(repo, embedding_svc)
 
 
 FactionService_Dep = Annotated[
@@ -216,8 +244,10 @@ FactionService_Dep = Annotated[
 ]
 
 
-def get_event_service(repo: EventRepository_Dep) -> EventService:
-    return EventService(repo)
+def get_event_service(
+    repo: EventRepository_Dep, embedding_svc: EmbeddingService_Dep
+) -> EventService:
+    return EventService(repo, embedding_svc)
 
 
 EventService_Dep = Annotated[
@@ -247,8 +277,9 @@ def get_auth_service(
     repo: UserRepository_Dep,
     world: WorldRepository_Dep,
     settings: Settings_Dep,
+    embedder: EmbedderDep,
 ) -> AuthService:
-    return AuthService(repo, world, seed_starter_world=settings.seed_new_user_world)
+    return AuthService(repo, world, embedder, seed_starter_world=settings.seed_new_user_world)
 
 
 AuthService_Dep = Annotated[

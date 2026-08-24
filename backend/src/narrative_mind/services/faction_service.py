@@ -2,16 +2,20 @@ from narrative_mind.core.exceptions import NotFoundError
 from narrative_mind.domain.common import Page
 from narrative_mind.domain.faction import Faction, FactionCreate, FactionUpdate
 from narrative_mind.repositories.faction_repo import FactionRepository
+from narrative_mind.services.embedding_service import EmbeddingService
 
 
 class FactionService:
-    def __init__(self, repo: FactionRepository) -> None:
+    def __init__(self, repo: FactionRepository, embedding_service: EmbeddingService) -> None:
         self._repo = repo
+        self._embedding_service = embedding_service
 
     async def create(self, payload: FactionCreate) -> Faction:
         faction = Faction(**payload.model_dump())
         row = await self._repo.create(faction.model_dump())
-        return Faction.model_validate(row)
+        created = Faction.model_validate(row)
+        await self._embedding_service.reindex("Faction", created.model_dump())
+        return created
 
     async def get(self, faction_id: str) -> Faction:
         row = await self._repo.get(faction_id)
@@ -49,7 +53,9 @@ class FactionService:
         row = await self._repo.update(faction_id, props)
         if row is None:
             raise NotFoundError(f"Faction with id {faction_id} not found")
-        return Faction.model_validate(row)
+        updated = Faction.model_validate(row)
+        await self._embedding_service.reindex("Faction", updated.model_dump())
+        return updated
 
     async def delete(self, faction_id: str) -> None:
         deleted = await self._repo.delete(faction_id)

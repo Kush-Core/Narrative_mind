@@ -151,20 +151,3 @@ class CharacterRepository:
         )
         record = await result.single()
         return record["character"] if record else None
-
-    async def touch_indexed_at(self, character_id: str) -> None:
-        await self._session.execute_write(self._touch_tx, character_id, self._owner_id)
-
-    @staticmethod
-    async def _touch_tx(tx, character_id: str, owner_id: str) -> None:
-        from datetime import UTC, datetime
-
-        # Scoped like every other write, even though this only ever runs as the
-        # background task queued by the create that just made this character:
-        # an unscoped write here would be a way to stamp another account's node.
-        await tx.run(
-            "MATCH (c:Character {id:$id, owner_id:$owner_id}) SET c.last_indexed_at = $ts",
-            id=character_id,
-            owner_id=owner_id,
-            ts=datetime.now(UTC).isoformat(),
-        )

@@ -2,16 +2,20 @@ from narrative_mind.core.exceptions import NotFoundError
 from narrative_mind.domain.common import Page
 from narrative_mind.domain.location import Location, LocationCreate, LocationUpdate
 from narrative_mind.repositories.location_repo import LocationRepository
+from narrative_mind.services.embedding_service import EmbeddingService
 
 
 class LocationService:
-    def __init__(self, repo: LocationRepository) -> None:
+    def __init__(self, repo: LocationRepository, embedding_service: EmbeddingService) -> None:
         self._repo = repo
+        self._embedding_service = embedding_service
 
     async def create(self, payload: LocationCreate) -> Location:
         location = Location(**payload.model_dump())
         row = await self._repo.create(location.model_dump())
-        return Location.model_validate(row)
+        created = Location.model_validate(row)
+        await self._embedding_service.reindex("Location", created.model_dump())
+        return created
 
     async def get(self, location_id: str) -> Location:
         row = await self._repo.get(location_id)
@@ -49,7 +53,9 @@ class LocationService:
         row = await self._repo.update(location_id, props)
         if row is None:
             raise NotFoundError(f"Location with id {location_id} not found")
-        return Location.model_validate(row)
+        updated = Location.model_validate(row)
+        await self._embedding_service.reindex("Location", updated.model_dump())
+        return updated
 
     async def delete(self, location_id: str) -> None:
         deleted = await self._repo.delete(location_id)

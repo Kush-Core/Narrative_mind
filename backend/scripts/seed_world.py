@@ -24,6 +24,8 @@ from neo4j import AsyncGraphDatabase
 
 from narrative_mind.core.config import get_settings
 from narrative_mind.db.migrations import run_migrations
+from narrative_mind.domain.starter_world_embeddings import load as load_starter_world_embeddings
+from narrative_mind.providers.deps import get_embedder
 from narrative_mind.repositories.user_repo import UserRepository
 from narrative_mind.repositories.world_repo import WorldRepository
 
@@ -50,11 +52,15 @@ async def main() -> int:
 
             owner_id = user["id"]
             world = WorldRepository(session)
+            embedder = get_embedder(settings)
+            embeddings = load_starter_world_embeddings(embedder.model_name)
 
             removed = await world.wipe_world(owner_id)
             print(f"removed {sum(removed.values())} existing world nodes:", removed)
 
-            await world.seed_starter_world(owner_id)
+            await world.seed_starter_world(
+                owner_id, embeddings=embeddings, embedding_model=embedder.model_name
+            )
             stats = await world.counts(owner_id)
 
         print(f"reset the world for {email} ({owner_id})")

@@ -1,21 +1,23 @@
-import logging
-
 from narrative_mind.core.exceptions import NotFoundError
 from narrative_mind.domain.character import Character, CharacterCreate, CharacterUpdate
 from narrative_mind.domain.common import Page
 from narrative_mind.repositories.character_repo import CharacterRepository
-
-logger = logging.getLogger("narrative_mind.tasks")
+from narrative_mind.services.embedding_service import EmbeddingService
 
 
 class CharacterService:
-    def __init__(self, repo: CharacterRepository) -> None:
+    def __init__(self, repo: CharacterRepository, embedding_service: EmbeddingService) -> None:
         self._repo = repo
+        self._embedding_service = embedding_service
 
     async def create(self, payload: CharacterCreate) -> Character:
         character = Character(**payload.model_dump())
         row = await self._repo.create(character.model_dump(exclude={"display_name"}))
-        return Character.model_validate(row)
+        created = Character.model_validate(row)
+        await self._embedding_service.reindex(
+            "Character", created.model_dump(exclude={"display_name"})
+        )
+        return created
 
     async def get(self, character_id: str) -> Character:
         row = await self._repo.get(character_id)
@@ -53,13 +55,13 @@ class CharacterService:
         row = await self._repo.update(character_id, props)
         if row is None:
             raise NotFoundError(f"Character with id {character_id} not found")
-        return Character.model_validate(row)
+        updated = Character.model_validate(row)
+        await self._embedding_service.reindex(
+            "Character", updated.model_dump(exclude={"display_name"})
+        )
+        return updated
 
     async def delete(self, character_id: str) -> None:
         deleted = await self._repo.delete(character_id)
         if not deleted:
             raise NotFoundError(f"Character with id {character_id} not present, cannot delete")
-
-    async def reindex(self, character_id: str) -> None:
-        await self._repo.touch_indexed_at(character_id)
-        logger.info("reindexed character %s", character_id)

@@ -2,16 +2,20 @@ from narrative_mind.core.exceptions import NotFoundError
 from narrative_mind.domain.common import Page
 from narrative_mind.domain.event import Event, EventCreate, EventUpdate
 from narrative_mind.repositories.event_repo import EventRepository
+from narrative_mind.services.embedding_service import EmbeddingService
 
 
 class EventService:
-    def __init__(self, repo: EventRepository) -> None:
+    def __init__(self, repo: EventRepository, embedding_service: EmbeddingService) -> None:
         self._repo = repo
+        self._embedding_service = embedding_service
 
     async def create(self, payload: EventCreate) -> Event:
         event = Event(**payload.model_dump())
         row = await self._repo.create(event.model_dump())
-        return Event.model_validate(row)
+        created = Event.model_validate(row)
+        await self._embedding_service.reindex("Event", created.model_dump())
+        return created
 
     async def get(self, event_id: str) -> Event:
         row = await self._repo.get(event_id)
@@ -47,7 +51,9 @@ class EventService:
         row = await self._repo.update(event_id, props)
         if row is None:
             raise NotFoundError(f"Event with id {event_id} not found")
-        return Event.model_validate(row)
+        updated = Event.model_validate(row)
+        await self._embedding_service.reindex("Event", updated.model_dump())
+        return updated
 
     async def delete(self, event_id: str) -> None:
         deleted = await self._repo.delete(event_id)

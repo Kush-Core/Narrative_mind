@@ -40,26 +40,52 @@ class WorldRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def seed_starter_world(self, owner_id: str) -> None:
+    async def seed_starter_world(
+        self,
+        owner_id: str,
+        *,
+        embeddings: dict[str, list[float]] | None = None,
+        embedding_model: str | None = None,
+    ) -> None:
         """Create this owner's copy of the starter world.
 
         One transaction for all twenty-seven nodes and their edges: a half-built
         world is worse than none, and on the registration path it would leave an
         account holding a fragment with no way to ask for the rest.
+
+        `embeddings` is the precomputed starter-world vectors for the currently
+        configured model (see domain/starter_world_embeddings.py) — every
+        account's copy shares the same text, so the same vectors are valid for
+        all of them. When absent (no file yet, or the model changed since the
+        file was generated), nodes are created without an embedding and are
+        picked up later exactly like any other unembedded entity.
         """
-        await self._session.execute_write(self._seed_tx, owner_id)
+        await self._session.execute_write(self._seed_tx, owner_id, embeddings, embedding_model)
 
     @staticmethod
-    async def _seed_tx(tx: AsyncManagedTransaction, owner_id: str) -> None:
+    async def _seed_tx(
+        tx: AsyncManagedTransaction,
+        owner_id: str,
+        embeddings: dict[str, list[float]] | None,
+        embedding_model: str | None,
+    ) -> None:
         now = datetime.now(UTC).isoformat()
         params: dict[str, Any] = {"owner_id": owner_id, "now": now}
+
+        def embedding_fields(slug: str) -> dict[str, Any]:
+            vector = embeddings.get(slug) if embeddings else None
+            if vector is None:
+                return {"embedding": None, "embedding_model": None, "embedded_at": None}
+            return {"embedding": vector, "embedding_model": embedding_model, "embedded_at": now}
 
         await tx.run(
             """
             UNWIND $rows AS row
             CREATE (l:Location {
                 id: row.id, name: row.name, region: row.region,
-                description: row.description, created_at: $now, owner_id: $owner_id
+                description: row.description, created_at: $now, owner_id: $owner_id,
+                embedding: row.embedding, embedding_model: row.embedding_model,
+                embedded_at: row.embedded_at
             })
             """,
             rows=[
@@ -68,6 +94,7 @@ class WorldRepository:
                     "name": name,
                     "region": region,
                     "description": desc,
+                    **embedding_fields(slug),
                 }
                 for slug, name, region, desc in LOCATIONS
             ],
@@ -78,7 +105,9 @@ class WorldRepository:
             UNWIND $rows AS row
             CREATE (f:Faction {
                 id: row.id, name: row.name, ideology: row.ideology,
-                description: row.description, created_at: $now, owner_id: $owner_id
+                description: row.description, created_at: $now, owner_id: $owner_id,
+                embedding: row.embedding, embedding_model: row.embedding_model,
+                embedded_at: row.embedded_at
             })
             """,
             rows=[
@@ -87,6 +116,7 @@ class WorldRepository:
                     "name": name,
                     "ideology": ideology,
                     "description": desc,
+                    **embedding_fields(slug),
                 }
                 for slug, name, ideology, desc in FACTIONS
             ],
@@ -97,7 +127,9 @@ class WorldRepository:
             UNWIND $rows AS row
             CREATE (e:Event {
                 id: row.id, name: row.name, summary: row.summary,
-                timeline_order: row.timeline_order, created_at: $now, owner_id: $owner_id
+                timeline_order: row.timeline_order, created_at: $now, owner_id: $owner_id,
+                embedding: row.embedding, embedding_model: row.embedding_model,
+                embedded_at: row.embedded_at
             })
             """,
             rows=[
@@ -106,6 +138,7 @@ class WorldRepository:
                     "name": name,
                     "timeline_order": order,
                     "summary": summary,
+                    **embedding_fields(slug),
                 }
                 for slug, name, order, summary in EVENTS
             ],
@@ -117,7 +150,9 @@ class WorldRepository:
             CREATE (c:Character {
                 id: row.id, name: row.name, aliases: row.aliases,
                 status: row.status, description: row.description,
-                created_at: $now, owner_id: $owner_id
+                created_at: $now, owner_id: $owner_id,
+                embedding: row.embedding, embedding_model: row.embedding_model,
+                embedded_at: row.embedded_at
             })
             """,
             rows=[
@@ -127,6 +162,7 @@ class WorldRepository:
                     "aliases": aliases,
                     "status": status,
                     "description": desc,
+                    **embedding_fields(slug),
                 }
                 for slug, name, aliases, status, desc in CHARACTERS
             ],

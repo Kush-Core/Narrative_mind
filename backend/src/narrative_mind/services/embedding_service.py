@@ -13,14 +13,35 @@ _ATTRIBUTE_FIELDS = {
 }
 
 
-class EmbeddingService:
-    """Turns an entity's own fields into a vector and persists it.
+def canonical_text(label: str, entity: dict[str, Any]) -> str:
+    """The one deterministic string a label+entity always embeds to.
 
-    Owns the canonical-text construction so every caller — the per-entity
-    reindex hooks and the bulk backfill script alike — builds the exact same
-    string for the exact same entity. If that logic lived in each of the four
-    entity services instead, the four copies would drift.
+    Module-level rather than a method so every caller builds the exact same
+    string for the exact same entity: the per-entity reindex hooks, the bulk
+    backfill script, and `scripts/precompute_starter_world_embeddings.py`
+    alike. If this logic were duplicated across them, the copies would drift.
     """
+    name = entity.get("name") or ""
+    aliases = entity.get("aliases") or []
+    header = f"{name} ({', '.join(aliases)})." if aliases else f"{name}."
+
+    lines = [header]
+
+    attribute_field = _ATTRIBUTE_FIELDS.get(label)
+    if attribute_field:
+        value = entity.get(attribute_field)
+        if value:
+            lines.append(f"{attribute_field.capitalize()}: {value}.")
+
+    body = entity.get("description") or entity.get("summary")
+    if body:
+        lines.append(body)
+
+    return " ".join(lines)
+
+
+class EmbeddingService:
+    """Turns an entity's own fields into a vector and persists it."""
 
     def __init__(self, repo: EmbeddingRepository, provider: EmbeddingProvider) -> None:
         self._repo = repo
@@ -30,7 +51,7 @@ class EmbeddingService:
         """Embed and persist a single entity. Called synchronously from the
         create/update path — see the Phase 3 plan on why this can't be a
         background task."""
-        text = self._canonical_text(label, entity)
+        text = canonical_text(label, entity)
         [vector] = await self._provider.embed_documents([text])
         await self._repo.write_embedding(entity["id"], vector, self._provider.model_name)
 
@@ -41,30 +62,10 @@ class EmbeddingService:
         if not stale:
             return 0
 
-        texts = [self._canonical_text(entity["label"], entity) for entity in stale]
+        texts = [canonical_text(entity["label"], entity) for entity in stale]
         vectors = await self._provider.embed_documents(texts)
 
         for entity, vector in zip(stale, vectors, strict=True):
             await self._repo.write_embedding(entity["id"], vector, self._provider.model_name)
 
         return len(stale)
-
-    @staticmethod
-    def _canonical_text(label: str, entity: dict[str, Any]) -> str:
-        name = entity.get("name") or ""
-        aliases = entity.get("aliases") or []
-        header = f"{name} ({', '.join(aliases)})." if aliases else f"{name}."
-
-        lines = [header]
-
-        attribute_field = _ATTRIBUTE_FIELDS.get(label)
-        if attribute_field:
-            value = entity.get(attribute_field)
-            if value:
-                lines.append(f"{attribute_field.capitalize()}: {value}.")
-
-        body = entity.get("description") or entity.get("summary")
-        if body:
-            lines.append(body)
-
-        return " ".join(lines)
