@@ -57,6 +57,19 @@ class UserRepository:
 
         return record["user"] if record else None
 
+    async def list_all(self) -> list[dict[str, Any]]:
+        return await self._session.execute_read(self._list_all_tx)
+
+    @staticmethod
+    async def _list_all_tx(tx: AsyncManagedTransaction) -> list[dict[str, Any]]:
+        query = """
+        MATCH (u:User)
+        RETURN u {.id, .email} AS user
+        """
+
+        result = await tx.run(query)
+        return [record["user"] async for record in result]
+
     async def get_by_id(self, user_id: str) -> dict[str, Any] | None:
         return await self._session.execute_read(
             self._get_by_id_tx,
