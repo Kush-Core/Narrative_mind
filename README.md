@@ -8,8 +8,13 @@ something happened and who was there — usually lives in a writer's head or
 scattered across flat documents, where nothing can be asked of it. Narrative
 Mind stores that state as an actual graph and puts a workspace over it: four
 entity types (`Character`, `Location`, `Faction`, `Event`), typed relationships
-between them, traversal queries across the result, and LLM endpoints that write
-prose from an entity or extract entities and relationships out of a passage.
+between them, traversal queries across the result, LLM endpoints that write
+prose from an entity or extract entities and relationships out of a passage,
+and Graph RAG — every entity carries a vector embedding of its own text, and
+`POST /ai/ask` answers a natural-language question about the world with a
+grounded, cited answer: vector search seeds the question, a graph traversal
+expands the seeds into their surrounding relationships, and the model is
+constrained to that context and validated against it.
 
 The shipped capability is the **Narrative Graph (V1)**, implemented end-to-end
 across both halves of this repository.
@@ -21,7 +26,7 @@ across both halves of this repository.
 | [`backend/`](backend/) | Async FastAPI service over Neo4j — entities, relationships, graph traversal, AI endpoints, JWT auth. Setup and full API reference: [`backend/README.md`](backend/README.md) |
 | [`frontend/`](frontend/) | React + TypeScript workspace — a desktop-class, dark-only UI over the API. Setup and feature list: [`frontend/README.md`](frontend/README.md) |
 | [`docs/`](docs/) | Design and analysis documents (see [Documents](#documents) — some are dated snapshots) |
-| [`docker-compose.yml`](docker-compose.yml) | Neo4j 5 for local development |
+| [`docker-compose.yml`](docker-compose.yml) | Neo4j 5.26 for local development |
 
 The two halves deploy independently as separate Vercel projects; neither
 imports from the other, and the API contract is the only coupling.
@@ -29,8 +34,10 @@ imports from the other, and the API contract is the only coupling.
 ## Quickstart
 
 **Prerequisites:** Python 3.12+, [uv](https://docs.astral.sh/uv/), Node.js
-20.19+, Docker (or any reachable Neo4j 5.x instance), and
-[Ollama](https://ollama.com) if you want the `/ai` endpoints.
+20.19+, Docker (or any reachable Neo4j 5.18+ instance — needed for Graph
+RAG's `vector.similarity.cosine()`), and [Ollama](https://ollama.com) if you
+want the `/ai` endpoints (chat and embeddings both run through it locally by
+default).
 
 **1. Neo4j** — from the repository root:
 
@@ -51,10 +58,11 @@ uv run uvicorn narrative_mind.main:app --reload    # http://localhost:8000
 ```
 
 Interactive API docs at <http://localhost:8000/docs>. For the `/ai` endpoints,
-also `ollama pull llama3.2:3b`. See
+also `ollama pull llama3.2:3b` (chat) and `ollama pull nomic-embed-text-v2-moe`
+(embeddings, powers Graph RAG). See
 [`backend/README.md`](backend/README.md#llm-provider-ollama-local-vs-groq-deployed)
-for the Ollama-vs-Groq provider choice — local development needs only Ollama,
-and no Groq account.
+for the Ollama-vs-Groq/Google provider choices — local development needs only
+Ollama, no Groq or Google account.
 
 **3. Frontend** — in `frontend/`:
 
@@ -104,7 +112,14 @@ a test created.
   gestures.
 - **AI** — `POST /ai/describe` (prose from an entity) and `POST /ai/extract`
   (schema-constrained entity/relationship extraction from a passage), behind a
-  swappable provider: Ollama locally, Groq in deployment.
+  swappable chat provider: Ollama locally, Groq in deployment.
+- **Graph RAG** — every entity embeds its own text on create/update (a second,
+  independent swappable provider: Ollama locally, Google in deployment, since
+  Groq has no embeddings endpoint). `POST /ai/retrieve` runs owner-scoped
+  vector search plus graph expansion into a bounded, citable context block;
+  `POST /ai/ask` generates an answer from it and strips any citation the model
+  invents. Isolation is structural, not just filtered: one account's search
+  can never surface another's entity, even a byte-identical one.
 
 ## Not built yet
 
@@ -114,8 +129,10 @@ Roadmap capabilities named in the design documents but absent from the code:
 
 Also outstanding:
 
-- No UI reaches the `/ai` endpoints — `frontend/src/features/ai/` and
-  `features/world/` are reserved, empty slices.
+- No UI reaches any `/ai` endpoint, including `/ai/retrieve` and `/ai/ask` —
+  `frontend/src/features/ai/` and `features/world/` are reserved, empty
+  slices. Graph RAG is fully implemented backend-side and exercised by
+  `curl`/the interactive docs, but there is no chat or retrieval UI yet.
 - One world per account, and no switcher — an account cannot keep two separate
   worlds or share one with somebody else.
 - The frontend's planned world-overview/global-search milestone (M7) and its
@@ -125,9 +142,9 @@ Also outstanding:
 
 | | |
 |---|---|
-| **Backend** | Python 3.12, FastAPI (async), Neo4j 5 via Bolt, Pydantic v2, PyJWT, pwdlib/argon2, uv, ruff, pytest |
+| **Backend** | Python 3.12, FastAPI (async), Neo4j 5.26 via Bolt (vector similarity search), Pydantic v2, PyJWT, pwdlib/argon2, Ollama/Groq (chat), Ollama/Google Gemini (embeddings), uv, ruff, pytest |
 | **Frontend** | React 19, TypeScript, Vite, Tailwind v4 (CSS-first), shadcn/ui + Radix, TanStack Query & Table, Zustand, React Hook Form + Zod, Cytoscape, Vitest + MSW |
-| **Deployed on** | Vercel (two projects), Neo4j Aura, Groq |
+| **Deployed on** | Vercel (two projects), Neo4j Aura, Groq, Google Gemini |
 
 ## Documents
 
@@ -154,7 +171,13 @@ execute real Cypher against the configured Neo4j instance. Each of those
 registers its own account and runs inside that account's world, so tests are
 isolated from each other by the same ownership rule that isolates users, and
 each one deletes its accounts and everything they own afterwards — a suite run
-leaves the database exactly as it found it. The frontend suite covers the API,
+leaves the database exactly as it found it. RAG tests never call a real
+Ollama/Groq/Google — `tests/conftest.py` overrides the embedding provider with
+a deterministic fake for the whole suite, and the chat provider is stubbed per
+test — and `test_rag_isolation.py` proves one account's retrieval can never
+surface another's entity, even a byte-identical one, which is the regression
+test for the multi-tenancy trap in `db.index.vector.queryNodes()` (see
+`docs/backend/GRAPH_RAG_PLAN.md` §2.3). The frontend suite covers the API,
 schema, domain-rule, and graph-model layers with the backend mocked at the
 network boundary; it has no component tests yet.
 

@@ -2,11 +2,19 @@
 
 The Narrative Graph API: an async **FastAPI + Neo4j** service that models the
 entities of a fictional world — `Character`, `Location`, `Faction`, `Event` —
-and the relationships between them as a graph, and exposes two AI endpoints
-(prose generation and schema-constrained entity extraction) behind a swappable
-LLM provider: **Ollama** for local development, **Groq** in deployment. One
-`LLM_PROVIDER` env var chooses between them and nothing above `providers/`
-knows which is in use.
+and the relationships between them as a graph. On top of CRUD and traversal it
+exposes two independent AI surfaces, each behind its own swappable provider so
+nothing above `providers/` knows which concrete implementation is in use:
+
+- **Chat** (`LLM_PROVIDER`: **Ollama** locally, **Groq** in deployment) —
+  `POST /ai/describe` (prose generation) and `POST /ai/extract`
+  (schema-constrained entity extraction).
+- **Embeddings** (`EMBEDDING_PROVIDER`: **Ollama** locally, **Google** in
+  deployment) — power Graph RAG: every entity carries a vector of its own
+  text, `POST /ai/retrieve` runs vector search plus graph expansion into a
+  citable context block, and `POST /ai/ask` generates a grounded answer from
+  it. Groq has no embeddings endpoint, which is why this is a second,
+  independent provider axis rather than a third `LLMProvider` method.
 
 This document covers the backend only — setup, the API surface, and deploying
 it. For what the project is, how the two halves fit together, and what is and
@@ -20,21 +28,41 @@ with `core`, `domain`, and `providers` as leaves.
 
 - **`api/`** — routers and request-scoped dependency injection (HTTP ↔ domain).
 - **`services/`** — business rules and orchestration; raise domain errors only.
+  Includes the RAG pipeline: `embedding_service` (canonical text → vector →
+  persist), `retrieval_service` (embed → seed → expand → serialize), and
+  `rag_service` (prompt, generate, validate citations).
 - **`repositories/`** — all Cypher; return plain dicts via map projections.
-- **`providers/`** — the LLM behind a `Protocol` (`LLMProvider`), implemented
-  twice: `OllamaProvider` and `GroqProvider`.
-- **`domain/`** — Pydantic v2 models (Create/Update/Read DTO triads, `Page[T]`).
+  `embedding_repo` and `graph_repo` are label-generic — one repo across all
+  four entity types rather than a method on each.
+- **`providers/`** — two independent `Protocol`-based seams: `LLMProvider`
+  (chat — `OllamaProvider`, `GroqProvider`) and `EmbeddingProvider`
+  (embeddings — `OllamaEmbeddingProvider`, `GoogleEmbeddingProvider`,
+  `FakeEmbeddingProvider` for tests). Each is resolved independently in
+  `providers/deps.py`.
+- **`domain/`** — Pydantic v2 models (Create/Update/Read DTO triads, `Page[T]`,
+  `rag.py`'s retrieval/ask DTOs).
 - **`core/`** — config, logging, exception hierarchy, error handlers.
 - **`db/`** — async Neo4j driver lifecycle, session dependency, idempotent migrations.
+
+The full Graph RAG design — including the two decisions worth understanding
+before touching this code (§2.2: why embedding models are never mixed within
+one database; §2.3: exact owner-scoped cosine similarity rather than
+`db.index.vector.queryNodes()`, which ignores `owner_id` and can leak another
+account's entities into a caller's results) — is in
+[`../docs/backend/GRAPH_RAG_PLAN.md`](../docs/backend/GRAPH_RAG_PLAN.md).
 
 ## Prerequisites
 
 - **Python 3.12+**
 - **[uv](https://docs.astral.sh/uv/)** — packaging and virtual-environment manager
 - **Neo4j 5.x** — reachable via the Bolt protocol (local Docker or a managed instance)
-- **[Ollama](https://ollama.com)** — local LLM runtime; required for the `/ai`
-  endpoints under the default provider, and not needed at all if you point
-  `LLM_PROVIDER` at Groq. Everything else works without it.
+- **[Ollama](https://ollama.com)** — local runtime for both the default chat
+  provider (`/ai/describe`, `/ai/extract`) and the default embedding provider
+  (`/ai/retrieve`, `/ai/ask`, and every entity's embedding on create/update).
+  Not needed at all if you point `LLM_PROVIDER` at Groq **and**
+  `EMBEDDING_PROVIDER` at Google — the two are independent, so you can mix
+  local chat with hosted embeddings or vice versa. Everything else works
+  without it.
 
 ## Setup
 
@@ -78,16 +106,48 @@ ships, which is called out where the two differ.
 | `NEO4J_USERNAME` | Neo4j username | `neo4j` |
 | `NEO4J_PASSWORD` | Neo4j password — **must be set**; the empty default won't authenticate | `""` (`.env.example` ships `password123`, matching the compose file) |
 
-**LLM provider** — only affects the two `/ai` routes
+**LLM provider (chat only)** — `/ai/describe` and `/ai/extract`; independent
+of the embedding provider below (see [Architecture](#architecture))
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `LLM_PROVIDER` | `ollama` or `groq`; compared lowercased and stripped | `ollama` |
 | `OLLAMA_HOST` | Ollama server base URL | `http://localhost:11434` |
 | `OLLAMA_CHAT_MODEL` | Chat model for `/ai/describe` and `/ai/extract` | `llama3.2:3b` |
-| `OLLAMA_EMBED_MODEL` | Embedding model — Ollama only, and unused in V1 (reserved for RAG in V2; `GroqProvider.embed` raises `NotImplementedError`) | `nomic-embed-text-v2-moe:latest` |
 | `GROQ_API_KEY` | **Required when `LLM_PROVIDER=groq`**; never read otherwise | `""` |
 | `GROQ_CHAT_MODEL` | Groq chat model. Keep this an `openai/gpt-oss-*` model — `/ai/extract` sends a `json_schema` response format that only those support | `openai/gpt-oss-120b` |
+
+**Embedding provider** — powers Graph RAG (`/ai/retrieve`, `/ai/ask`, and
+every entity's embedding on create/update); independent of `LLM_PROVIDER`,
+since Groq has no embeddings endpoint
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `EMBEDDING_PROVIDER` | `ollama` or `google`; compared lowercased and stripped | `ollama` |
+| `OLLAMA_EMBED_MODEL` | Ollama embedding model | `nomic-embed-text-v2-moe:latest` |
+| `OLLAMA_EMBED_DIMENSIONS` | Vector width the Ollama model produces | `768` |
+| `GOOGLE_API_KEY` | **Required when `EMBEDDING_PROVIDER=google`**; never read otherwise | `""` |
+| `GOOGLE_EMBED_MODEL` | Google embedding model. Must support `embedContent` — `gemini-embedding-001` does, `text-embedding-004` does not (confirmed 404) | `""` |
+| `GOOGLE_EMBED_DIMENSIONS` | Truncates the model's native output via `output_dimensionality` — `gemini-embedding-001` natively outputs 3072 | `768` |
+
+Switching either `EMBEDDING_PROVIDER` or its model is not a config-only
+change: vectors from two different models are never comparable, even at the
+same width, so every existing entity's embedding becomes stale and needs
+`scripts/backfill_embeddings.py` re-run against it (see
+[Deployment](#deployment-vercel--neo4j-aura--groq-and-google) below).
+
+**Graph RAG retrieval** — `/ai/retrieve` and `/ai/ask`
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `RAG_SEED_TOP_K` | How many entities the vector search seeds retrieval with | `8` |
+| `RAG_EXPAND_DEPTH` | Hops the graph expansion walks out from the seeds (clamped 1–2) | `1` |
+| `RAG_MAX_CONTEXT_ENTITIES` | Cap on entities in the serialized context block; seeds are kept first, expansion-only entities are dropped first | `30` |
+
+No minimum-similarity-score setting exists on purpose — cosine score
+distributions differ per embedding model, so an absolute threshold tuned
+against one model is meaningless against another's. Retrieval always ranks by
+top-K instead.
 
 **Authentication**
 
@@ -104,7 +164,8 @@ ships, which is called out where the two differ.
 | `SEED_NEW_USER_WORLD` | Give each new account its own copy of the starter world at registration, so a first login opens onto a populated graph. Set `false` for empty accounts — the test suite does, since a world arriving unasked is indistinguishable from data a test created | `true` |
 
 `.env` is gitignored; never commit real secrets. The `.env.example` values for
-`GROQ_API_KEY` and `JWT_SECRET_KEY` are placeholders, not working credentials.
+`GROQ_API_KEY`, `GOOGLE_API_KEY`, and `JWT_SECRET_KEY` are placeholders, not
+working credentials.
 
 ### 3. Start Neo4j
 
@@ -115,21 +176,26 @@ provided for local development:
 docker compose up -d neo4j
 ```
 
-This starts Neo4j 5 on `localhost:7687` (Bolt) and `localhost:7474` (browser
-UI) with credentials `neo4j` / `password123`, matching `.env.example`, and
-persists data in a named volume across restarts.
+This starts Neo4j 5.26 on `localhost:7687` (Bolt) and `localhost:7474`
+(browser UI) with credentials `neo4j` / `password123`, matching
+`.env.example`, and persists data in a named volume across restarts. Pinned
+to 5.26 (LTS) rather than a floating `5` tag because Graph RAG's similarity
+search uses `vector.similarity.cosine()`, which needs Neo4j 5.18+ — a managed
+Aura instance is already well past that, so this keeps local and deployed in
+step.
 
 Constraints and indexes are created automatically on application startup
 (see `db/migrations.py`); no manual schema step is required.
 
-### 4. Start Ollama and pull the model
+### 4. Start Ollama and pull the models
 
-Only for the default `LLM_PROVIDER=ollama`; skip this if you are running against
-Groq (see the next section).
+Only for the default `LLM_PROVIDER=ollama` / `EMBEDDING_PROVIDER=ollama`; skip
+whichever one you're not using against a local server (see the next two
+sections).
 
 ```bash
-ollama pull llama3.2:3b            # required for /ai/describe and /ai/extract
-ollama pull nomic-embed-text-v2-moe   # optional in V1 (used by RAG in V2)
+ollama pull llama3.2:3b               # chat: /ai/describe, /ai/extract
+ollama pull nomic-embed-text-v2-moe   # embeddings: every entity write, /ai/retrieve, /ai/ask
 ```
 
 ## LLM provider: Ollama (local) vs Groq (deployed)
@@ -153,11 +219,31 @@ copied from a deployment config and has `LLM_PROVIDER=groq`, switch back:
 
 1. In `.env`, set `LLM_PROVIDER=ollama` (or delete the line — `ollama` is
    the default).
-2. Make sure `OLLAMA_HOST`, `OLLAMA_CHAT_MODEL`, and `OLLAMA_EMBED_MODEL`
-   point at your local server (see `.env.example`).
-3. Complete step 4 above (start Ollama, pull the model) if you haven't.
+2. Make sure `OLLAMA_HOST` and `OLLAMA_CHAT_MODEL` point at your local server
+   (see `.env.example`).
+3. Complete step 4 above (start Ollama, pull `llama3.2:3b`) if you haven't.
 4. Restart the API — `GROQ_API_KEY` can stay blank; it's only read when
    `LLM_PROVIDER=groq`.
+
+## Embedding provider: Ollama (local) vs Google (deployed)
+
+The same pattern, one axis over — `EmbeddingProvider` implementations
+(`providers/embeddings.py`), selected by `EMBEDDING_PROVIDER`, independent of
+`LLM_PROVIDER`:
+
+- **`ollama`** (default) — talks to the same local Ollama server as chat,
+  using a separate embedding model (`OLLAMA_EMBED_MODEL`). What
+  `.env.example` ships with.
+- **`google`** — talks to the hosted Google Gemini embeddings API
+  (`embedContent`). **Deployment-only**, for the same reason as Groq: Vercel
+  serverless functions have no persistent process for a local model.
+  (Google, not Groq, because Groq has no embeddings endpoint at all.)
+
+If your `.env` was copied from a deployment config and has
+`EMBEDDING_PROVIDER=google`, switch back the same way: set
+`EMBEDDING_PROVIDER=ollama` (or delete the line), make sure `OLLAMA_HOST` and
+`OLLAMA_EMBED_MODEL` point at your local server, pull the embedding model if
+you haven't, and restart — `GOOGLE_API_KEY` can stay blank.
 
 ## Running the API
 
@@ -182,6 +268,8 @@ uv run uvicorn narrative_mind.main:app --reload
 | `GET /graph/shortest-path?source=&target=` | ✓ | Shortest path between two characters |
 | `POST /ai/describe` | ✓ | Generate a prose description |
 | `POST /ai/extract` | ✓ | Schema-constrained entity extraction |
+| `POST /ai/retrieve` | ✓ | Graph RAG retrieval only — seeds, expanded entities, edges, and the serialized context block, no LLM call |
+| `POST /ai/ask` | ✓ | Graph RAG end to end — a grounded answer with citations validated against the retrieved entity ids |
 
 `/locations`, `/factions`, and `/events` expose the same five CRUD routes as
 `/characters` (all ✓ auth). List endpoints accept `limit`, `offset`,
@@ -293,12 +381,35 @@ curl -X POST localhost:8000/ai/extract \
   -d '{"passage":"Aria Vane, a captain of the Iron Pact, met Borin in the city of Dunhollow."}'
 ```
 
-## Deployment (Vercel + Neo4j Aura + Groq)
+Graph RAG (require whichever provider `EMBEDDING_PROVIDER` selects to be
+reachable for `/ai/retrieve`, plus `LLM_PROVIDER`'s for `/ai/ask`; both work
+against the starter world out of the box, since every entity in it already
+carries a vector):
+
+```bash
+curl -X POST localhost:8000/ai/retrieve \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"question":"who rules Kestrelwatch?","top_k":5}'
+
+curl -X POST localhost:8000/ai/ask \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"question":"who rules Kestrelwatch?","debug":true}'
+```
+
+`top_k` and `depth` on either endpoint override `RAG_SEED_TOP_K` /
+`RAG_EXPAND_DEPTH` for that one request. `debug:true` on `/ai/ask` includes
+the full retrieval trace behind the answer — the seeds, the expanded entities,
+and the context block the model actually saw.
+
+## Deployment (Vercel + Neo4j Aura + Groq and Google)
 
 Production runs the backend as Vercel serverless functions, backed by a
-managed Neo4j Aura instance and Groq for the `/ai` endpoints (see
-[LLM provider](#llm-provider-ollama-local-vs-groq-deployed) above for why
-Ollama isn't used in production).
+managed Neo4j Aura instance, Groq for chat, and Google for embeddings (see
+[LLM provider](#llm-provider-ollama-local-vs-groq-deployed) and
+[Embedding provider](#embedding-provider-ollama-local-vs-google-deployed)
+above for why Ollama isn't used in production).
 
 **One-time setup:**
 
@@ -307,13 +418,15 @@ Ollama isn't used in production).
    generated `NEO4J_URI` (`neo4j+s://...`), username, and password.
 2. **Groq** — create an API key at
    [console.groq.com](https://console.groq.com).
-3. **Vercel project** — import this repo, set **Root Directory** to
+3. **Google** — create an API key for the Gemini API at
+   [aistudio.google.com](https://aistudio.google.com/apikey), for embeddings.
+4. **Vercel project** — import this repo, set **Root Directory** to
    `backend`. The repo already includes `backend/vercel.json` (routes all
    requests to the FastAPI `app`) and `backend/requirements.txt` (pinned
    deps, since Vercel's Python builder doesn't read `uv.lock` — regenerate
    it after dependency changes with
    `uv export --no-hashes --no-dev -o requirements.txt`).
-4. **Environment variables** — set these in the Vercel project's
+5. **Environment variables** — set these in the Vercel project's
    **Settings → Environment Variables** (they are separate from your local
    `.env` and from the frontend Vercel project's variables):
 
@@ -323,16 +436,37 @@ Ollama isn't used in production).
    | `LLM_PROVIDER` | `groq` |
    | `GROQ_API_KEY` | from console.groq.com |
    | `GROQ_CHAT_MODEL` | `openai/gpt-oss-120b` |
+   | `EMBEDDING_PROVIDER` | `google` |
+   | `GOOGLE_API_KEY` | from aistudio.google.com |
+   | `GOOGLE_EMBED_MODEL` | `models/gemini-embedding-001` |
+   | `GOOGLE_EMBED_DIMENSIONS` | `768` |
+   | `RAG_SEED_TOP_K` / `RAG_EXPAND_DEPTH` / `RAG_MAX_CONTEXT_ENTITIES` | optional — defaults (`8` / `1` / `30`) are fine to start |
    | `JWT_SECRET_KEY` | a real random value, e.g. `openssl rand -hex 32` — never the `.env.example` placeholder |
    | `JWT_ALGORITHM` | `HS256` |
    | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` |
    | `CORS_ORIGINS` | JSON array of the deployed **frontend** origin, e.g. `["https://your-app.vercel.app"]` |
    | `ENVIRONMENT` / `DEBUG` | `production` / `false` |
 
-5. Deploy. Vercel auto-suggests env var names it finds in `.env.example`
+6. Deploy. Vercel auto-suggests env var names it finds in `.env.example`
    files anywhere in the repo — including the frontend's `VITE_*` vars —
    when setting up a project; ignore/delete any that don't belong to this
    project rather than filling them in.
+7. **Backfill embeddings once.** New accounts embed their starter world from
+   the precomputed file (`domain/starter_world_embeddings.<model>.json`,
+   already committed for `gemini-embedding-001`), so registration needs no
+   extra step. But any account that existed **before** this deploy — or any
+   account on a fresh Aura instance you're migrating data into — has entities
+   with no vector at all, and `/ai/ask` will answer every question with "not
+   in this world" until they get one:
+
+   ```bash
+   # from backend/, pointed at the deployed .env (Aura credentials, Google key)
+   uv run python scripts/backfill_embeddings.py --all
+   ```
+
+   Re-run this any time `EMBEDDING_PROVIDER` or its model changes — vectors
+   from two different models are never comparable, so a model switch stales
+   every embedding in the database at once.
 
 **Gotchas hit in practice, worth checking first if something breaks:**
 
@@ -340,10 +474,15 @@ Ollama isn't used in production).
   valid JSON (`["https://exact-origin.vercel.app"]`, matching scheme and
   no trailing slash) and must be redeployed after editing; env var changes
   don't apply to already-built deployments.
-- **`/ai/*` routes fail in production but the Groq key works via curl** —
-  confirm `LLM_PROVIDER` is set to lowercase `groq` in the Vercel env vars
-  (the app normalizes case, but double-check nothing else is misspelled)
-  and that you redeployed after adding the env vars.
+- **`/ai/describe` and `/ai/extract` fail in production but the Groq key
+  works via curl** — confirm `LLM_PROVIDER` is set to lowercase `groq` in the
+  Vercel env vars (the app normalizes case, but double-check nothing else is
+  misspelled) and that you redeployed after adding the env vars.
+- **`/ai/ask` always says the world doesn't cover the question, even for
+  things obviously in it** — almost always means the account's entities have
+  no embedding yet. Confirm `EMBEDDING_PROVIDER=google` and `GOOGLE_API_KEY`
+  are set, then run the backfill step above; `/ai/retrieve` with `debug`
+  unset still returns an empty `seeds` list when this is the cause.
 - **Frontend loads blank** — check the browser console first; a blank page
   with no console error usually means the build output/routing is fine and
   the real failure is a backend call failing (CORS, wrong
@@ -359,8 +498,18 @@ uv run ruff format .       # format
 uv run pytest -q           # run the test suite
 ```
 
-The model tests (`tests/test_pydantic_models.py`) and the AI stub-provider test
-(`tests/test_ai_service.py`) run without external services. The remaining tests
-are integration tests that exercise real Cypher against the configured Neo4j
-instance, so **Neo4j must be running** for the full suite to pass. Each
-integration test uses uniquely suffixed names and deletes the nodes it creates.
+The model tests (`tests/test_pydantic_models.py`), the AI stub-provider test
+(`tests/test_ai_service.py`), and one pure-fake retrieval test
+(`test_context_entity_cap_holds` in `tests/test_retrieval.py`) run without
+external services. The remaining tests are integration tests that exercise
+real Cypher against the configured Neo4j instance, so **Neo4j must be
+running** for the full suite to pass. Each integration test uses uniquely
+suffixed names and deletes the nodes it creates. RAG tests never need a real
+Ollama/Google reachable — `get_embedder` is overridden with a deterministic
+`FakeEmbeddingProvider` for the whole suite (`tests/conftest.py`), and
+`tests/test_rag.py`/`test_rag_isolation.py` override `get_llm` with a stub per
+test. `tests/test_rag_isolation.py` is the one worth reading even if you skip
+the rest — it is the regression test for §2.3 of the RAG plan (exact
+owner-scoped cosine vs. `db.index.vector.queryNodes()`), proving one
+account's retrieval can never surface another's entity even when the two are
+byte-identical.

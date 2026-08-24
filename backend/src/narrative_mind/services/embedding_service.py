@@ -13,6 +13,19 @@ _ATTRIBUTE_FIELDS = {
 }
 
 
+def _terminated(text: str) -> str:
+    """`text` with exactly one piece of terminal punctuation.
+
+    Ideology and status values are often full sentences already ending in
+    one (the starter world's Kestrel Order: "...The high ground was
+    earned."), and a naive `f"{value}."` would double it up into "..".
+    """
+    text = text.rstrip()
+    if text and text[-1] not in ".!?":
+        return text + "."
+    return text
+
+
 def canonical_text(label: str, entity: dict[str, Any]) -> str:
     """The one deterministic string a label+entity always embeds to.
 
@@ -23,7 +36,7 @@ def canonical_text(label: str, entity: dict[str, Any]) -> str:
     """
     name = entity.get("name") or ""
     aliases = entity.get("aliases") or []
-    header = f"{name} ({', '.join(aliases)})." if aliases else f"{name}."
+    header = _terminated(f"{name} ({', '.join(aliases)})" if aliases else name)
 
     lines = [header]
 
@@ -31,7 +44,7 @@ def canonical_text(label: str, entity: dict[str, Any]) -> str:
     if attribute_field:
         value = entity.get(attribute_field)
         if value:
-            lines.append(f"{attribute_field.capitalize()}: {value}.")
+            lines.append(_terminated(f"{attribute_field.capitalize()}: {value}"))
 
     body = entity.get("description") or entity.get("summary")
     if body:

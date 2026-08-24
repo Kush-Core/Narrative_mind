@@ -126,3 +126,54 @@ def other_headers(client: TestClient, registered_accounts: list[str]) -> dict[st
     """
     token = register_and_token(client, registered_accounts)
     return {"Authorization": f"Bearer {token}"}
+
+
+def make_entity(client: TestClient, collection: str, name: str, **extra) -> dict:
+    """POST a new entity through the API and return it. RAG tests need real
+    entities — with real, synchronously-written embeddings — rather than
+    Cypher fixtures, since the whole point is testing the write/retrieval
+    path the API actually exercises."""
+    res = client.post(f"/{collection}", json={"name": name, **extra})
+    assert res.status_code == 201, res.text
+    return res.json()
+
+
+@pytest.fixture
+def rag_world(client: TestClient) -> dict:
+    """A small, known world for one account: one location, one faction, and
+    two characters — one of them linked to both, plus each other. Built
+    through the API, so every entity here goes through the same synchronous
+    embedding path real usage does.
+
+    `SEED_NEW_USER_WORLD` is off for the whole suite (see the top of this
+    file), so RAG tests that need more than an empty account build their own
+    fixture rather than relying on the starter world.
+    """
+    location = make_entity(client, "locations", "Stormhaven", region="The Reach")
+    faction = make_entity(client, "factions", "The Iron Vigil", ideology="Order above all.")
+    character = make_entity(
+        client,
+        "characters",
+        "Corwin Ashgrove",
+        status="alive",
+        description="Captain of the Iron Vigil, stationed at Stormhaven.",
+    )
+    other_character = make_entity(client, "characters", "Mira Wren", status="alive")
+
+    for rel_type, target_id in (
+        ("MEMBER_OF", faction["id"]),
+        ("LOCATED_IN", location["id"]),
+        ("KNOWS", other_character["id"]),
+    ):
+        res = client.post(
+            f"/characters/{character['id']}/relationships",
+            json={"rel_type": rel_type, "target_id": target_id},
+        )
+        assert res.status_code == 201, res.text
+
+    return {
+        "location": location,
+        "faction": faction,
+        "character": character,
+        "other_character": other_character,
+    }
