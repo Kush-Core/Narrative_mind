@@ -25,6 +25,7 @@ from narrative_mind.services.event_service import EventService
 from narrative_mind.services.faction_service import FactionService
 from narrative_mind.services.graph_service import GraphService
 from narrative_mind.services.location_service import LocationService
+from narrative_mind.services.rag_service import RagService
 from narrative_mind.services.retrieval_service import RetrievalService
 from narrative_mind.services.user_service import AuthService
 
@@ -293,6 +294,16 @@ def get_retrieval_service(
 RetrievalService_Dep = Annotated[
     RetrievalService,
     Depends(get_retrieval_service),
+]
+
+
+def get_rag_service(retrieval: RetrievalService_Dep, llm: LLMDep) -> RagService:
+    return RagService(retrieval, llm)
+
+
+RagService_Dep = Annotated[
+    RagService,
+    Depends(get_rag_service),
 ]
 
 

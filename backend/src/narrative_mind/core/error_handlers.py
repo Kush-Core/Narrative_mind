@@ -7,6 +7,7 @@ from narrative_mind.core.exceptions import (
     ConflictError,
     NarrativeMindError,
     NotFoundError,
+    ProviderUnavailableError,
     ValidationError,
 )
 
@@ -49,6 +50,13 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=403,
             content=_error_body("authorization_error", exc.message),
+        )
+
+    @app.exception_handler(ProviderUnavailableError)
+    async def _provider_unavailable(_: Request, exc: ProviderUnavailableError) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content=_error_body("provider_unavailable", exc.message),
         )
 
     @app.exception_handler(NarrativeMindError)

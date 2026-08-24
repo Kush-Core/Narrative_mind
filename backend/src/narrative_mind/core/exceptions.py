@@ -24,3 +24,7 @@ class AuthenticationError(NarrativeMindError):
 
 class AuthorizationError(NarrativeMindError):
     """The authenticated user is not allowed to perform the operation."""
+
+
+class ProviderUnavailableError(NarrativeMindError):
+    """An external model provider (chat or embedding) could not be reached."""
