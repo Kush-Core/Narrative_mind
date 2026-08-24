@@ -25,6 +25,7 @@ from narrative_mind.services.event_service import EventService
 from narrative_mind.services.faction_service import FactionService
 from narrative_mind.services.graph_service import GraphService
 from narrative_mind.services.location_service import LocationService
+from narrative_mind.services.retrieval_service import RetrievalService
 from narrative_mind.services.user_service import AuthService
 
 Settings_Dep = Annotated[Settings, Depends(get_settings)]
@@ -271,6 +272,28 @@ def get_ai_service(llm: LLMDep) -> AIService:
 
 
 AIServiceDep = Annotated[AIService, Depends(get_ai_service)]
+
+
+def get_retrieval_service(
+    embedding_repo: EmbeddingRepository_Dep,
+    graph_repo: GraphRepository_Dep,
+    embedder: EmbedderDep,
+    settings: Settings_Dep,
+) -> RetrievalService:
+    return RetrievalService(
+        embedding_repo,
+        graph_repo,
+        embedder,
+        seed_top_k=settings.rag_seed_top_k,
+        expand_depth=settings.rag_expand_depth,
+        max_context_entities=settings.rag_max_context_entities,
+    )
+
+
+RetrievalService_Dep = Annotated[
+    RetrievalService,
+    Depends(get_retrieval_service),
+]
 
 
 def get_auth_service(

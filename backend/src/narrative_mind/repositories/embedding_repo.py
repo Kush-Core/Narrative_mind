@@ -88,3 +88,40 @@ class EmbeddingRepository:
         """
         result = await tx.run(query, owner_id=owner_id, model_name=model_name)
         return [{"label": record["labels"][0], **record["properties"]} async for record in result]
+
+    async def find_similar(self, query_vector: list[float], top_k: int) -> list[dict[str, Any]]:
+        """This owner's top-K entities by cosine similarity to `query_vector`.
+
+        Exact, owner-scoped cosine — not `db.index.vector.queryNodes()`. That
+        index returns the global top-K across the whole database with no
+        pre-filter, so in a multi-tenant schema it can hand back another
+        account's nodes and starve this owner after an owner_id post-filter
+        (§2.3 of the RAG plan). Scoping has to be in the MATCH itself.
+        """
+        return await self._session.execute_read(
+            self._find_similar_tx, self._owner_id, query_vector, top_k
+        )
+
+    @staticmethod
+    async def _find_similar_tx(
+        tx: AsyncManagedTransaction, owner_id: str, query_vector: list[float], top_k: int
+    ) -> list[dict[str, Any]]:
+        # Called on every retrieval, unlike find_stale's batch-only scan, so
+        # this is one label-scoped MATCH per label (each using that label's
+        # existing owner_id index) unioned together, rather than one
+        # label-free scan across the whole database.
+        branches = " UNION ALL ".join(
+            f"MATCH (n:{label} {{owner_id: $owner_id}}) WHERE n.embedding IS NOT NULL RETURN n"
+            for label in _EMBEDDABLE_LABELS
+        )
+        query = f"""
+        CALL () {{
+            {branches}
+        }}
+        WITH n, vector.similarity.cosine(n.embedding, $query_vector) AS score
+        RETURN labels(n)[0] AS label, n.id AS id, n.name AS name, score
+        ORDER BY score DESC
+        LIMIT $top_k
+        """
+        result = await tx.run(query, owner_id=owner_id, query_vector=query_vector, top_k=top_k)
+        return [dict(record) async for record in result]

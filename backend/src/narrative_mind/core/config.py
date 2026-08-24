@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     # arrives unasked would be indistinguishable from data a test created.
     seed_new_user_world: bool = True
 
+    # Graph RAG retrieval (Phase 4): how many entities the vector search seeds
+    # with, how many hops the graph expansion walks out from those seeds, and
+    # how many entities the serialized context block is capped at. Deliberately
+    # no minimum-similarity-score setting — cosine score distributions differ
+    # per embedding model, so a threshold tuned against one model is meaningless
+    # against another's; rank by top-K instead (see §2.2 of the RAG plan).
+    rag_seed_top_k: int = 8
+    rag_expand_depth: int = 1
+    rag_max_context_entities: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:

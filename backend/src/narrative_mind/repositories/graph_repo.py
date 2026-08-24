@@ -82,6 +82,56 @@ class GraphRepository:
             "relationships": relationships,
         }
 
+    async def expand(self, seed_ids: list[str], depth: int) -> dict[str, Any]:
+        """The induced subgraph within `depth` hops of any of `seed_ids`.
+
+        Multi-seed, any-label generalisation of `ego_network`'s key move:
+        collect the full node set first — every seed plus everything within
+        `depth` hops of any of them — then match every edge whose *both*
+        endpoints are in that set. An edge collected only from the paths a
+        traversal happened to walk outward on would miss edges *between*
+        neighbours; the induced subgraph is what a client can draw without
+        inferring adjacency, and it is the reason a graph beats a flat top-K
+        entity list here at all — the answer to "who would object" lives in
+        the edges around a seed, not in any one seed's own text.
+        """
+        depth = max(1, min(depth, 2))  # RAG expansion, capped tighter than ego_network's UI depth
+        if not seed_ids:
+            return {"nodes": [], "relationships": []}
+        return await self._session.execute_read(self._expand_tx, seed_ids, depth, self._owner_id)
+
+    @staticmethod
+    async def _expand_tx(
+        tx: AsyncManagedTransaction, seed_ids: list[str], depth: int, owner_id: str
+    ) -> dict[str, Any]:
+        query = f"""
+        MATCH (s {{owner_id: $owner_id}})
+        WHERE s.id IN $seed_ids
+        WITH collect(DISTINCT s) AS seeds
+        UNWIND seeds AS seed
+        OPTIONAL MATCH (seed)-[*1..{depth}]-(n)
+        WHERE n.owner_id = $owner_id
+        WITH seeds, collect(DISTINCT n) AS neighbors
+        UNWIND seeds + neighbors AS x
+        WITH collect(DISTINCT x) AS scope
+        UNWIND scope AS source
+        OPTIONAL MATCH (source)-[r]->(target)
+        WHERE target IN scope
+        WITH scope, collect(DISTINCT r) AS rels
+        RETURN [x IN scope | x {{.id, .name, labels: labels(x)}}] AS nodes,
+               [r IN rels | {{
+                   source: startNode(r).id,
+                   target: endNode(r).id,
+                   rel_type: type(r),
+                   sentiment: r.sentiment
+               }}] AS relationships
+        """
+        result = await tx.run(query, seed_ids=seed_ids, owner_id=owner_id)  # type: ignore
+        record = await result.single()
+        if record is None:
+            return {"nodes": [], "relationships": []}
+        return {"nodes": record["nodes"], "relationships": record["relationships"]}
+
     async def shortest_path(self, source: str, target: str) -> dict[str, Any] | None:
         return await self._session.execute_read(self._sp_tx, source, target, self._owner_id)
 
