@@ -1,9 +1,10 @@
+import asyncio
 import os
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from neo4j import GraphDatabase
+from neo4j import AsyncGraphDatabase, GraphDatabase
 
 # Registration normally hands a new account its own copy of the starter world.
 # Tests register an account each, so that would put twenty-seven entities in front
@@ -13,9 +14,13 @@ from neo4j import GraphDatabase
 os.environ["SEED_NEW_USER_WORLD"] = "false"
 
 from narrative_mind.core.config import get_settings  # noqa: E402
+from narrative_mind.core.security import decode_access_token  # noqa: E402
 from narrative_mind.main import create_app  # noqa: E402
 from narrative_mind.providers.deps import get_embedder  # noqa: E402
 from narrative_mind.providers.embeddings import FakeEmbeddingProvider  # noqa: E402
+from narrative_mind.repositories.embedding_repo import EmbeddingRepository  # noqa: E402
+from narrative_mind.repositories.world_repo import WorldRepository  # noqa: E402
+from narrative_mind.services.embedding_service import EmbeddingService  # noqa: E402
 
 get_settings.cache_clear()
 
@@ -177,3 +182,45 @@ def rag_world(client: TestClient) -> dict:
         "character": character,
         "other_character": other_character,
     }
+
+
+@pytest.fixture
+def client_owner_id(client: TestClient) -> str:
+    """The owner_id behind `client`'s bearer token, for resolving
+    entity_id(owner_id, slug) in graph-recall assertions."""
+    token = client.headers["Authorization"].removeprefix("Bearer ")
+    return decode_access_token(token)["sub"]
+
+
+@pytest.fixture
+def starter_world(client: TestClient, client_owner_id: str) -> None:
+    """This account's copy of the starter world, embedded with the fake embedder.
+
+    `SEED_NEW_USER_WORLD` is off for the whole suite (top of this file), and
+    there is no precomputed embedding file for `fake-embedding-v1`, so the
+    world is seeded unembedded and then backfilled through the same recovery
+    path scripts/backfill_embeddings.py uses.
+
+    A short-lived async driver is opened and closed entirely inside one
+    `asyncio.run`, so nothing crosses into the TestClient's event loop — the
+    hazard `teardown_driver` documents is about *sharing* the app's driver,
+    which this does not do. Teardown is already covered: `registered_accounts`
+    deletes everything carrying this owner_id.
+    """
+    settings = get_settings()
+
+    async def _seed() -> None:
+        driver = AsyncGraphDatabase.driver(
+            settings.neo4j_uri, auth=(settings.neo4j_username, settings.neo4j_password)
+        )
+        try:
+            async with driver.session() as session:
+                await WorldRepository(session).seed_starter_world(client_owner_id)
+                embedder = FakeEmbeddingProvider()
+                await EmbeddingService(
+                    EmbeddingRepository(session, client_owner_id), embedder
+                ).backfill()
+        finally:
+            await driver.close()
+
+    asyncio.run(_seed())

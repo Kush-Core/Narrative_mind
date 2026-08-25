@@ -245,6 +245,112 @@ If your `.env` was copied from a deployment config and has
 `OLLAMA_EMBED_MODEL` point at your local server, pull the embedding model if
 you haven't, and restart — `GOOGLE_API_KEY` can stay blank.
 
+## Real Embedding Evaluation
+
+Graph RAG retrieval (`RetrievalService`, above) is correct by construction —
+the test suite proves it *runs* right. It says nothing about whether it
+*retrieves well*. That's a separate, measured question, and this project
+answers it with a graph-recall metric: given a question whose answer is known
+to live in a specific set of entities and relationships in the starter world,
+what fraction of that set actually reaches the serialized context block. See
+`docs/backend/graph-recall-evaluation.md` for the full metric design.
+
+**`uv run pytest -q` is offline and deterministic.** It uses
+`FakeEmbeddingProvider`, a SHA-256 stub with no semantics whatsoever, so it
+needs no embedding server, no API key, no network access, and no downloaded
+model. It validates metric correctness (node/edge recall, aggregation, the
+edge cases in the plan's §10.5), dataset integrity (every annotated slug and
+edge really exists in `domain/starter_world.py`, direction-sensitive), and
+that the pipeline is wired correctly end to end.
+
+The same metric can also be run against **real semantic embedding models** —
+`ollama` locally, `google` in deployment — via
+`scripts/evaluate_graph_recall.py`, using the project's existing
+`EmbeddingProvider` abstraction (`providers/deps.get_embedder`; the script
+never instantiates a provider directly and never fakes a score).
+
+**Real-model evaluation is deliberately separate from `pytest`.** It needs a
+reachable model or provider credentials, makes real network calls, and its
+numbers vary by model and change when a model is swapped — the opposite of
+what a `pytest` assertion should depend on. It is a benchmark you run and
+read, not a pass/fail gate.
+
+### Reproducing a run
+
+```bash
+uv sync
+docker compose up -d neo4j                          # from the repo root
+ollama pull nomic-embed-text-v2-moe                  # if evaluating against ollama
+# configure .env (see "Configure environment variables" above)
+uv run python scripts/seed_world.py you@example.com  # or register through the app
+uv run python scripts/precompute_starter_world_embeddings.py
+uv run python scripts/backfill_embeddings.py you@example.com
+uv run python scripts/evaluate_graph_recall.py you@example.com --depth 1
+```
+
+The last two steps make sure every entity is embedded under the model this
+run will query with — `evaluate_graph_recall.py` refuses to run against a
+world with stale or missing embeddings rather than silently score against
+mismatched vectors.
+
+**Example — illustrative only.** Real output from one run against
+`nomic-embed-text-v2-moe:latest` (Ollama, local), `top_k=8`, `depth=1`.
+Numbers depend on the model and will differ on yours; do not treat this as an
+achieved benchmark for your configuration:
+
+```
+Graph Recall Evaluation
+───────────────────────────────────────────────────────────────────
+Provider      OllamaEmbeddingProvider
+Model         nomic-embed-text-v2-moe:latest (768d)
+Account       you@example.com
+World         starter-world · Character 10 / Location 6 / Faction 5 / Event 6 · 69 edges
+Dataset       verge-starter-v1
+Examples      12 queries
+Top-K         8
+Depth         1
+Max context   30 entities
+Started       2026-08-25T08:12:08+00:00
+Duration      1.21s
+
+query                                  node    edge   seed  ents  edges  chars
+q01-kestrelwatch-long-winter          1.000   0.500  1.000    21     27   3950
+q02-kestrel-order-members             1.000   1.000  1.000    21     27   3946
+...
+q12-thea-ivo-connection               1.000   1.000  0.667    22     26   3913
+
+Graph Recall (node, macro)          1.000        <-- PRIMARY
+Graph Recall (node, micro)          1.000
+Edge recall (macro)                 0.708        (10 of 12 queries scored)
+Edge recall (micro)                 0.689
+Seed recall (macro)                 0.787
+Expansion gain                      +0.213        graph expansion over vector search alone
+Anchor hit rate                     1.000
+```
+
+Running the same account again at `--depth 2` reproduces the tradeoff the
+metric exists to surface: node recall was already at its ceiling from depth
+1's expansion, so depth 2 buys nothing more there, while edge recall *drops*
+(0.708 → 0.661 in that same run) — the 4000-character context budget
+truncates the larger depth-2 edge set in Cypher's `collect(DISTINCT r)`
+order, which carries no ordering guarantee (see §13.2 of the plan doc). A
+node-only metric would never have shown this; it's the reason the metric
+reports edge recall as a co-primary number instead of folding it away.
+
+### Why the split
+
+Deterministic correctness testing and real-world semantic evaluation answer
+different questions. `pytest` proves the retrieval pipeline and the recall
+metric itself behave correctly on inputs whose expected output is known in
+advance — that has to be reproducible on every machine, every CI run, with no
+external dependency. Real-model evaluation asks whether *this* embedding
+model actually finds the right entities for *these* questions — that depends
+on the model, can only be answered by calling it, and is expected to change
+as models change. Conflating the two would either make the test suite
+flaky and network-dependent, or make the benchmark meaninglessly
+deterministic. Keeping them apart, and always reporting which one produced a
+given number, is what makes both trustworthy.
+
 ## Running the API
 
 ```bash
