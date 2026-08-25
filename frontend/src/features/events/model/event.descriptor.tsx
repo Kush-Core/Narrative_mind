@@ -1,5 +1,6 @@
 import { CalendarClockIcon } from "lucide-react"
 
+import { DescribeAssist } from "@/features/ai/assist"
 import { eventsApi } from "@/features/events/api/events.api"
 import { TimelinePositionBadge } from "@/features/events/components/TimelinePositionBadge"
 import {
@@ -88,6 +89,9 @@ export const eventDescriptor: EntityDescriptor<Event, EventForm, EventListParams
       placeholder: "What happened, to whom, and what it changed…",
       maxLength: 2000,
       span: "full",
+      // The one AI attach point in a form. A render prop, so `entity-kit`
+      // still knows nothing about AI — see `EntityFieldSpec.assist`.
+      assist: (context) => <DescribeAssist context={context} />,
     },
   ],
 

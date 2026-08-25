@@ -1,5 +1,6 @@
 import { UsersIcon } from "lucide-react"
 
+import { DescribeAssist } from "@/features/ai/assist"
 import { charactersApi } from "@/features/characters/api/characters.api"
 import { AliasList } from "@/features/characters/components/AliasList"
 import { CharacterStatusBadge } from "@/features/characters/components/CharacterStatusBadge"
@@ -89,6 +90,9 @@ export const characterDescriptor: EntityDescriptor<Character, CharacterForm, Cha
         placeholder: "Who they are, what drives them, how they carry themselves…",
         maxLength: 2000,
         span: "full",
+        // The one AI attach point in a form. A render prop, so `entity-kit`
+        // still knows nothing about AI — see `EntityFieldSpec.assist`.
+        assist: (context) => <DescribeAssist context={context} traitFields={["status"]} />,
       },
     ],
 

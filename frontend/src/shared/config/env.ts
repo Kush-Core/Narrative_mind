@@ -30,6 +30,21 @@ const DEFAULT_API_BASE_URL = "http://localhost:8000"
 interface RuntimeProfile {
   /** Client-side deadline for a single request, in milliseconds. */
   requestTimeoutMs: number
+  /**
+   * Deadline for a request that waits on a language model, in milliseconds.
+   *
+   * A separate budget because the ordinary one is far too short for these: the
+   * four `/ai/*` endpoints run an embedding call, Cypher, and/or a full LLM
+   * generation with no streaming and no server-side timeout, and `/ai/extract`
+   * does *constrained* decoding over a passage of up to 5000 characters. Local
+   * Ollama routinely exceeds 15s on that; the general deadline would abort a
+   * request that was going to succeed.
+   *
+   * Development is the more generous of the two because that is where the slow
+   * local model runs — deployment uses Groq, and its ceiling is the serverless
+   * platform's function limit rather than this value.
+   */
+  aiRequestTimeoutMs: number
   /** How often the status bar re-checks backend reachability, in milliseconds. */
   healthPollIntervalMs: number
   /** Log normalized API errors to the console as they are produced. */
@@ -38,12 +53,14 @@ interface RuntimeProfile {
 
 const DEVELOPMENT_PROFILE: RuntimeProfile = {
   requestTimeoutMs: 15_000,
+  aiRequestTimeoutMs: 120_000,
   healthPollIntervalMs: 30_000,
   logApiErrors: true,
 }
 
 const PRODUCTION_PROFILE: RuntimeProfile = {
   requestTimeoutMs: 30_000,
+  aiRequestTimeoutMs: 60_000,
   healthPollIntervalMs: 60_000,
   logApiErrors: false,
 }

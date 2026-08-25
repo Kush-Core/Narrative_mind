@@ -25,6 +25,8 @@ export type ApiErrorCode =
   | "domain_validation"
   | "bad_request"
   | "authentication_error"
+  | "authorization_error"
+  | "provider_unavailable"
   | "validation"
   | "network"
   | "timeout"

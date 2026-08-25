@@ -130,6 +130,27 @@ export const router = createBrowserRouter([
             },
           },
 
+          // The AI slice is lazy for the same reason as the graph: nothing here
+          // is needed to render the workspace, and the four entity chunks must
+          // not pick it up. `features/ai/assist` is the narrow entry the entity
+          // descriptors use so that importing the describe affordance does not
+          // drag these pages along with it.
+          {
+            path: paths.ai.ask(),
+            lazy: async () => {
+              const { AskPage } = await import("@/features/ai")
+              return { Component: AskPage }
+            },
+          },
+
+          {
+            path: paths.ai.extract(),
+            lazy: async () => {
+              const { ExtractPage } = await import("@/features/ai")
+              return { Component: ExtractPage }
+            },
+          },
+
           ...placeholderPaths.map((path) => ({ path, element: <RoutePlaceholder /> })),
           { path: "*", element: <NotFoundRoute /> },
         ],

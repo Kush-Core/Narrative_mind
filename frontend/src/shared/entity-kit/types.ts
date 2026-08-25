@@ -58,6 +58,25 @@ export interface SelectOption {
 export type EntityFieldName<TForm extends FieldValues> = Extract<keyof TForm, string> & Path<TForm>
 
 /**
+ * What an assist affordance is given to work with.
+ *
+ * Deliberately not the whole form object. An assist needs to read a couple of
+ * sibling fields and write one — handing it `useForm`'s return would let it
+ * reach into validation, submission, and reset, none of which is its business,
+ * and would couple every assist to React Hook Form.
+ */
+export interface FieldAssistContext {
+  /** The current value of the field this assist belongs to. */
+  value: unknown
+  /** Read a sibling field — an entity's name, its status. */
+  readField: (name: string) => unknown
+  /** Write a produced value into this field, marking the form dirty. */
+  apply: (value: string) => void
+  /** True while the form is submitting. */
+  disabled: boolean
+}
+
+/**
  * One editable field: how to label it, how to render it, and what the backend's
  * constraints are. Validation itself lives in the Zod schema — these are the
  * *presentation* facts that a schema cannot express.
@@ -76,6 +95,16 @@ export interface EntityFieldSpec<TForm extends FieldValues> {
   required?: boolean
   /** Full-width fields (textareas, tag lists) break the two-column grid. */
   span?: "half" | "full"
+  /**
+   * An affordance rendered in this field's label row — today, the AI describe
+   * assist.
+   *
+   * A render prop rather than a flag, for the same reason `slots` is: the engine
+   * must not learn what an assist *is*. `EntityForm` places whatever this
+   * returns and knows nothing more, so adding a second kind of assist later
+   * needs no change here, and `entity-kit` never imports a feature slice.
+   */
+  assist?: (context: FieldAssistContext) => ReactNode
 }
 
 /** One list column. `cell` renders from the entity; sorting is server-side. */

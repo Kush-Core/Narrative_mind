@@ -1,13 +1,15 @@
 import { useEffect } from "react"
 import type { Layout, LayoutChangedMeta } from "react-resizable-panels"
-import { Outlet } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 
 import { CommandProvider } from "@/app/providers/command-provider"
+import { AskDockOverlay, AskDockPanel } from "@/app/shell/AskDockHost"
 import { CommandBar } from "@/app/shell/CommandBar"
 import { ExplorerSidebar } from "@/app/shell/ExplorerSidebar"
 import { StatusBar } from "@/app/shell/StatusBar"
+import { paths } from "@/routes/paths"
 import { BREAKPOINT, useMediaQuery } from "@/shared/hooks/useMediaQuery"
-import { DEFAULT_PANEL_SIZES, useUiStore } from "@/shared/store/ui-store"
+import { resolvePanelLayout, useUiStore } from "@/shared/store/ui-store"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/shared/ui/resizable"
 
 /**
@@ -20,20 +22,24 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/shared/u
  * persist through the UI store, so the workspace reopens as it was left.
  *
  * **Responsive behaviour is desktop-first and structural, not adaptive-mobile:**
- * below `lg` the explorer drops to its icon rail. The workspace stays itself at
- * every width rather than becoming a different, phone-shaped product.
+ * below `lg` the explorer drops to its icon rail and the Ask dock becomes an
+ * overlay rather than a third column. The workspace stays itself at every width
+ * rather than becoming a different, phone-shaped product.
  */
 
 /** Panel ids double as the keys of the persisted layout map. */
-const PANEL_ID = { explorer: "explorer", main: "main" } as const
+const PANEL_ID = { explorer: "explorer", main: "main", aux: "aux" } as const
 
 export function WorkspaceLayout() {
   const compact = useMediaQuery(BREAKPOINT.compact)
+  const { pathname } = useLocation()
 
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed)
   const setSidebarCollapsed = useUiStore((state) => state.setSidebarCollapsed)
   const panelSizes = useUiStore((state) => state.panelSizes)
   const setPanelSizes = useUiStore((state) => state.setPanelSizes)
+  const askDockOpen = useUiStore((state) => state.askDockOpen)
+  const setAskDockOpen = useUiStore((state) => state.setAskDockOpen)
 
   // A compact viewport forces the rail; the user's own preference is restored
   // by the store as soon as there is room for the full explorer again.
@@ -42,17 +48,34 @@ export function WorkspaceLayout() {
   }, [compact, setSidebarCollapsed])
 
   const showExplorerPanel = !sidebarCollapsed
+  // The `/ask` route already *is* the panel the dock would show — rendering it
+  // a second time would duplicate the whole surface, not just waste space. This
+  // is checked here rather than only in the command that opens it, because
+  // `askDockOpen` persists: a user who opened the dock elsewhere and then
+  // navigated to `/ask` by a sidebar link, not ⌘I, would otherwise still see it
+  // twice. Closing the state on arrival, rather than merely hiding the render,
+  // keeps the persisted flag honest — reopening the dock from another screen
+  // still reflects the choice the user actually made.
+  const dockRedundant = pathname === paths.ai.ask()
+  useEffect(() => {
+    if (dockRedundant && askDockOpen) setAskDockOpen(false)
+  }, [dockRedundant, askDockOpen, setAskDockOpen])
+  const effectiveDockOpen = askDockOpen && !dockRedundant
+  // Below `lg` there is no width to divide three ways, so the dock leaves the
+  // panel group entirely and becomes an overlay.
+  const showDockPanel = effectiveDockOpen && !compact
 
   function handleLayoutChanged(layout: Layout, meta: LayoutChangedMeta) {
     // Only a real drag or keyboard resize should overwrite the stored geometry;
     // remounts and constraint recomputes must not rewrite the user's layout.
     if (!meta.isUserInteraction) return
 
-    const explorer = layout[PANEL_ID.explorer]
-    const main = layout[PANEL_ID.main]
+    // Only the panels actually rendered report a size; the store merges, so an
+    // arrangement without the dock does not overwrite the dock's width.
     setPanelSizes({
-      explorer: explorer ?? panelSizes.explorer,
-      main: main ?? panelSizes.main,
+      explorer: layout[PANEL_ID.explorer],
+      main: layout[PANEL_ID.main],
+      aux: layout[PANEL_ID.aux],
     })
   }
 
@@ -78,10 +101,13 @@ export function WorkspaceLayout() {
           <ResizablePanelGroup
             // Remounting on structural change lets each arrangement start from
             // the stored sizes instead of inheriting the previous one's.
-            key={`${showExplorerPanel}`}
+            key={`${showExplorerPanel}-${showDockPanel}`}
             orientation="horizontal"
             className="min-h-0 flex-1"
-            defaultLayout={{ ...DEFAULT_PANEL_SIZES, ...panelSizes }}
+            defaultLayout={resolvePanelLayout(panelSizes, {
+              explorer: showExplorerPanel,
+              aux: showDockPanel,
+            })}
             onLayoutChanged={handleLayoutChanged}
           >
             {showExplorerPanel ? (
@@ -103,8 +129,24 @@ export function WorkspaceLayout() {
                 <Outlet />
               </main>
             </ResizablePanel>
+
+            {showDockPanel ? (
+              <>
+                <ResizableHandle withHandle />
+                <ResizablePanel
+                  id={PANEL_ID.aux}
+                  defaultSize={`${panelSizes.aux}`}
+                  minSize="18"
+                  maxSize="45"
+                >
+                  <AskDockPanel onClose={() => setAskDockOpen(false)} />
+                </ResizablePanel>
+              </>
+            ) : null}
           </ResizablePanelGroup>
         </div>
+
+        <AskDockOverlay open={effectiveDockOpen && compact} onOpenChange={setAskDockOpen} />
 
         <StatusBar />
       </div>

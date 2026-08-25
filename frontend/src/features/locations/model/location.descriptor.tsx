@@ -1,5 +1,6 @@
 import { MapPinIcon } from "lucide-react"
 
+import { DescribeAssist } from "@/features/ai/assist"
 import { locationsApi } from "@/features/locations/api/locations.api"
 import { RegionBadge } from "@/features/locations/components/RegionBadge"
 import {
@@ -80,6 +81,9 @@ export const locationDescriptor: EntityDescriptor<Location, LocationForm, Locati
       placeholder: "What stands here, who passes through, what it feels like to arrive…",
       maxLength: 2000,
       span: "full",
+      // The one AI attach point in a form. A render prop, so `entity-kit`
+      // still knows nothing about AI — see `EntityFieldSpec.assist`.
+      assist: (context) => <DescribeAssist context={context} traitFields={["region"]} />,
     },
   ],
 

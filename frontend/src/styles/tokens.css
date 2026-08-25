@@ -93,6 +93,18 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
+  /* ------------------------------------------------------- AI presence */
+  /* The one expressive motion in the workspace, and the only place anything
+   * animates that is not communicating a state change. Its colours are the
+   * product accent rather than a new hue: AI is part of the tool, not a guest
+   * with its own palette. The two periods are deliberately non-harmonic — they
+   * never re-sync, so the motion has no perceptible loop point, which is the
+   * whole difference between "ambient" and "animated GIF". */
+  --ai-glow-core: color-mix(in oklab, var(--primary) 55%, transparent);
+  --ai-glow-halo: color-mix(in oklab, var(--ring) 30%, transparent);
+  --duration-ai-breathe: 2600ms;
+  --duration-ai-drift: 4300ms;
+
   /* ---------------------------------------------------------------- z-layers */
   --z-sticky: 20;
   --z-overlay: 40;

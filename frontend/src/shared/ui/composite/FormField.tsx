@@ -30,6 +30,13 @@ interface FormFieldProps {
   required?: boolean
   /** Live character count or similar, shown beside the label. */
   hint?: ReactNode
+  /**
+   * A control belonging to this field, shown at the end of the label row — an
+   * assist, a "clear" affordance. It sits here rather than beside the input so
+   * it never competes with the control for the field's own width, and so every
+   * field that has one puts it in the same place.
+   */
+  action?: ReactNode
   className?: string
   children: (props: FormFieldRenderProps) => ReactNode
 }
@@ -40,6 +47,7 @@ export function FormField({
   description,
   required = false,
   hint,
+  action,
   className,
   children,
 }: FormFieldProps) {
@@ -63,7 +71,12 @@ export function FormField({
             </span>
           ) : null}
         </Label>
-        {hint ? <span className="text-2xs text-muted-foreground">{hint}</span> : null}
+        {hint !== undefined || action !== undefined ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {hint ? <span className="text-2xs text-muted-foreground">{hint}</span> : null}
+            {action}
+          </div>
+        ) : null}
       </div>
 
       {children({ id, describedBy, invalid })}

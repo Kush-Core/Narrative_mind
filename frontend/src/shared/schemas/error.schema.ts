@@ -21,6 +21,13 @@ import { z } from "zod"
  * Domain error codes the backend's handlers can produce. `conflict` is included
  * although no service currently raises it (analysis §Observations #2) — the
  * handler is registered, so the client honours the full contract at zero cost.
+ *
+ * `authorization_error` and `provider_unavailable` complete the set against
+ * `core/error_handlers.py`. The latter is the one that matters in practice:
+ * `RagService.ask` wraps a failed model call in `ProviderUnavailableError`, so
+ * a 503 from `/ai/ask` carries this code. Without it here the envelope still
+ * parsed — the human message survived — but the code fell back to `server`,
+ * and the AI surfaces could not tell "the model is down" from a generic 500.
  */
 export const DomainErrorCodeSchema = z.enum([
   "not_found",
@@ -28,6 +35,8 @@ export const DomainErrorCodeSchema = z.enum([
   "domain_validation",
   "bad_request",
   "authentication_error",
+  "authorization_error",
+  "provider_unavailable",
 ])
 
 export type DomainErrorCode = z.infer<typeof DomainErrorCodeSchema>

@@ -18,7 +18,9 @@ import {
   FlagIcon,
   type LucideIcon,
   MapPinIcon,
+  MessageCircleQuestionIcon,
   RouteIcon,
+  ScanTextIcon,
   UsersIcon,
   WaypointsIcon,
 } from "lucide-react"
@@ -112,6 +114,23 @@ export const navSections: NavSection[] = [
         label: "Shortest path",
         path: paths.graph.shortestPath(),
         icon: RouteIcon,
+      },
+      // The AI surfaces sit here rather than in a section of their own: both
+      // reason over the world the graph draws, and giving them their own group
+      // would frame AI as a separate product bolted to the side of this one.
+      {
+        id: "ask",
+        label: "Ask the world",
+        path: paths.ai.ask(),
+        icon: MessageCircleQuestionIcon,
+        shortcut: "g a",
+      },
+      {
+        id: "extract",
+        label: "Extract from text",
+        path: paths.ai.extract(),
+        icon: ScanTextIcon,
+        shortcut: "g x",
       },
     ],
   },

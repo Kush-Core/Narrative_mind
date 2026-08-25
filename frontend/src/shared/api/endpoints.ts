@@ -63,8 +63,16 @@ export const endpoints = {
     shortestPath: () => "/graph/shortest-path",
   },
 
+  /**
+   * The AI surface. Two backend routers share the `/ai` prefix — `routers/ai.py`
+   * (describe, extract: model calls over the request body alone) and
+   * `routers/rag.py` (retrieve, ask: Graph RAG over the caller's own world) —
+   * but they are one path namespace to the client, so they are one entry here.
+   */
   ai: {
     describe: () => "/ai/describe",
     extract: () => "/ai/extract",
+    retrieve: () => "/ai/retrieve",
+    ask: () => "/ai/ask",
   },
 } as const

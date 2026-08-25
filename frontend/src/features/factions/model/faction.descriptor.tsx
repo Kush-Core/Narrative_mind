@@ -1,5 +1,6 @@
 import { FlagIcon } from "lucide-react"
 
+import { DescribeAssist } from "@/features/ai/assist"
 import { factionsApi } from "@/features/factions/api/factions.api"
 import {
   EMPTY_FACTION_FORM,
@@ -79,6 +80,9 @@ export const factionDescriptor: EntityDescriptor<Faction, FactionForm, FactionLi
       placeholder: "Who they are, how they are organised, who opposes them…",
       maxLength: 2000,
       span: "full",
+      // The one AI attach point in a form. A render prop, so `entity-kit`
+      // still knows nothing about AI — see `EntityFieldSpec.assist`.
+      assist: (context) => <DescribeAssist context={context} traitFields={["ideology"]} />,
     },
   ],
 

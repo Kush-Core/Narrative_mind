@@ -113,6 +113,76 @@
   transition-timing-function: var(--ease-standard);
 }
 
+/*
+ * The AI presence animation — a soft field of light that breathes, used only
+ * while an `/ai/*` request is in flight (see `features/ai/components/AiPulse`).
+ *
+ * Two counter-phased radial gradients, `transform` and `opacity` only, so the
+ * whole thing stays on the compositor: no layout, no paint, and deliberately no
+ * `filter: blur()` — a soft gradient stop gives the same diffusion for a
+ * fraction of the cost. Nothing rotates or sweeps, because anything travelling
+ * around a circle reads as a spinner and re-imports the exact convention this
+ * replaces.
+ *
+ * **Read the `to` keyframes as the resting state, not as a loop point.** The
+ * `prefers-reduced-motion` rule in `@layer base` below forces
+ * `animation-duration: 0.01ms` and `animation-iteration-count: 1` on
+ * everything, so under reduced motion these do not stop — they run once,
+ * instantly, and land on `to`. That frame is therefore authored to be a
+ * legible, deliberate glow rather than a copy of `from`, which would leave
+ * reduced-motion users looking at a nearly invisible smudge. The status label
+ * beside the pulse is visible for everyone for the same reason: it is the half
+ * of the signal that survives when motion cannot.
+ */
+@keyframes ai-breathe {
+  from {
+    transform: scale(0.92);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.88;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0.68;
+  }
+}
+
+@keyframes ai-drift {
+  from {
+    transform: translate3d(-4%, 2%, 0) scale(1.08);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate3d(4%, -2%, 0) scale(1.18);
+    opacity: 0.55;
+  }
+  to {
+    transform: translate3d(0, 0, 0) scale(1.12);
+    opacity: 0.42;
+  }
+}
+
+/*
+ * The two layers of the pulse, expressed here rather than as class strings so
+ * the gradient and its timing are one decision — the same reason `focus-ring`
+ * and `transition-chrome` live in this file.
+ *
+ * `ease-in-out` rather than a token easing: `--ease-standard` and `--ease-exit`
+ * are transition curves, shaped for a move that starts and finishes. A loop
+ * needs symmetry at both ends or it reads as a repeated snap.
+ */
+@utility ai-pulse-core {
+  background: radial-gradient(circle, var(--ai-glow-core) 0%, transparent 62%);
+  animation: ai-breathe var(--duration-ai-breathe) ease-in-out infinite;
+}
+
+@utility ai-pulse-halo {
+  background: radial-gradient(circle, var(--ai-glow-halo) 0%, transparent 62%);
+  animation: ai-drift var(--duration-ai-drift) ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

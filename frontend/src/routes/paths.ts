@@ -32,6 +32,17 @@ export const paths = {
     detail: (id: string) => `/events/${id}`,
   },
 
+  /**
+   * The AI surfaces. Both are single destinations with no id segment — an
+   * answer is not a resource, so there is nothing to deep-link *to*. The
+   * question itself rides on `?q=`, which is deep-linkable and is what makes a
+   * useful question shareable.
+   */
+  ai: {
+    ask: () => "/ask",
+    extract: () => "/extract",
+  },
+
   graph: {
     explorer: () => "/graph",
     /**

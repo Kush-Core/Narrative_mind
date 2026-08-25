@@ -717,6 +717,110 @@ is independently reviewable and leaves the app in a working state.
 
 ---
 
+## M10 — AI surfaces (added after M9; the four `/ai/*` endpoints)
+
+- **Goal:** the backend's four AI endpoints as one coherent capability, in the
+  workspace's own visual and behavioural language.
+- **Deliverables:** an `ai` slice (schema, resource, `useAiRequest`, four hooks,
+  components, two pages, the dock); `/ask` and `/extract` routes under
+  *Reasoning*; a dockable Ask panel in the shell; a "Suggest" assist in every
+  entity form; the nebula pulse as the one AI-pending indicator.
+- **Dependencies:** M2 (network/schema spine), M3–M4 (the entity engine's
+  field-spec seam), M1 (shell, navigation, command registry).
+
+> **M10 as-built notes (2026-08-25).**
+>
+> - **All four endpoints are mutations; the slice has no query keys and no
+>   cache.** An LLM answer is not server state — re-asking must genuinely
+>   re-ask — so `queryKeys` was left untouched and mutation state *is* the UI
+>   state. This removed invalidation, staleness, and key-shape drift from the
+>   feature entirely. The one genuine query in the slice reads the *world*
+>   (`useProposalMatches`), and it reuses `EntityPicker`'s existing
+>   `["entity-lookup", …]` key so the two share entries.
+>
+> - **`useAiRequest` is the whole consistency mechanism.** Cancellation
+>   (`useMutation` gives `mutationFn` no signal, unlike `useQuery`), the
+>   cancel-is-not-a-failure rule, and result retention across a cancel all live
+>   there, so the four features cannot disagree about them. `AiStateRegion` does
+>   the same for the loading/error/result transitions.
+>
+> - **The client needed a second deadline.** `requestTimeoutMs` is 15s dev / 30s
+>   prod; a local Ollama `/ai/extract` over a 5000-character passage blows that
+>   routinely. `aiRequestTimeoutMs` (120s dev / 60s prod) was added to the
+>   runtime profile and is applied once, in `ai.api.ts`, not at call sites.
+>   **Note for deployment:** `backend/vercel.json` sets no `maxDuration`, so the
+>   deployed ceiling is the Vercel plan default — a client deadline above it
+>   surfaces as a 504 rather than a clean timeout.
+>
+> - **Two error codes were missing from the shared contract.**
+>   `DomainErrorCodeSchema` and `ApiErrorCode` did not carry
+>   `provider_unavailable` or `authorization_error`, both of which have
+>   registered backend handlers. A 503 from `/ai/ask` still parsed (the human
+>   message survived) but fell back to `server`, so "the model is down" was
+>   indistinguishable from a generic 500 — which is exactly the distinction that
+>   decides whether retrieval-only is worth offering.
+>
+> - **`/ai/retrieve` is the degraded path.** With `debug: true` on every ask, the
+>   trace arrives with the answer, so retrieval is not needed on the happy path.
+>   It earns its place where `/ai/ask` cannot help: retrieval never touches the
+>   chat provider, so when generation fails the error state offers *"See what was
+>   retrieved"* and renders the same `RetrievalTrace` from a live call.
+>
+> - **Three states are easy to conflate and are handled separately.** A refusal
+>   is a 200 with empty `citations` and renders as calm prose. An *empty world*
+>   (`retrieval.entities` empty) gets its own empty state, because showing the
+>   model's "this world does not cover it" for an empty account reads as a broken
+>   feature. A cancellation renders nothing at all.
+>
+> - **The answer's inline `[uuid]` markers had to be parsed.** The model cites by
+>   the bracketed id it was shown, so raw UUIDs arrive inside the prose.
+>   `parseAnswer` chips retrieved ids, **drops** UUID-shaped ids that were never
+>   retrieved (the backend validates `citations`, but the inline markers are raw
+>   output), and leaves ordinary bracketed prose alone.
+>
+> - **The pulse rests, it does not stop.** `globals.css` already forced
+>   `animation-duration: 0.01ms` and `iteration-count: 1` under
+>   `prefers-reduced-motion`, so the animation runs once and lands on its `to`
+>   keyframe. That frame is therefore authored as a deliberate resting glow, and
+>   the status label is visible for everyone rather than being a reduced-motion
+>   fallback. Verified with reduced motion emulated.
+>
+> - **Bundle discipline held.** `features/ai/assist.ts` is a second, narrow entry
+>   so the four entity descriptors reach `DescribeAssist` without pulling the Ask
+>   and Extract pages; the shell reaches the dock through `React.lazy` for the
+>   same reason. Eager `index` chunk went 375.72 kB → 376.21 kB (+0.49 kB, the
+>   lazy wrapper); entity chunks grew ~0.07 kB each; the AI slice sits in its own
+>   20 kB chunk plus a shared 4.2 kB `ai.queries`.
+>
+> - **`ui-store` is at v2**, re-adding the `aux` panel that v1 removed.
+>   `resolvePanelLayout` derives the layout map from the panels actually
+>   rendered, which is what stops the v0-era "sizes do not sum to 100" bug from
+>   recurring now that a third panel comes and goes.
+>
+> - **One deliberate exception to "AI failures render inline":**
+>   `DescribeAssist` toasts. Its surface is a form label row shared with a
+>   character counter — there is nowhere to put a sentence, reporting it as the
+>   field's validation error would set `aria-invalid` on a valid textarea, and
+>   silence would leave a pressed button that visibly did nothing.
+>
+> - **Verified in a real browser** (Chromium via Playwright, backend + Neo4j +
+>   Ollama live, fresh seeded accounts): the full ask → answer → citations →
+>   trace flow, extraction with existing/new resolution, the describe assist
+>   applying into a character form, the dock's ⌘I toggle, entity-name seeding,
+>   question survival across client-side navigation, the compact-viewport
+>   overlay, reduced-motion, and no horizontal page scroll at 768px and 900px.
+>   **Zero console errors.** 34 new unit tests (372 total).
+>
+> - **Not built:** citation → graph node highlighting. `useGraphInteraction`
+>   documents selection as deliberately view-scoped React state, explicitly *not*
+>   the Zustand store; driving it from the dock would mean either contradicting
+>   that decision or adding a cross-slice channel. Citations link to entity
+>   detail pages instead. Also not built, by backend design: writing extracted
+>   entities back to the graph (`/ai/extract` returns names, not ids, and
+>   persists nothing).
+
+---
+
 ## Deferred / out-of-scope seams (built only when approved)
 
 These are explicitly **not** in the milestones above; the architecture leaves each
@@ -724,8 +828,9 @@ a correctly-shaped, inert seam (see [FRONTEND_ARCHITECTURE.md](./FRONTEND_ARCHIT
 
 - **Authentication/authorization** — `AuthTokenProvider`, 401 policy,
   `routes/guards/`, cache-reset-on-identity. Out of scope.
-- **AI surfaces** (`/ai/describe`, `/ai/extract`) — an `ai` slice + form/panel
-  slots. Out of scope now; endpoints already exist for a later milestone.
+- ~~**AI surfaces**~~ — **built in M10** (all four endpoints, not just the two
+  this register listed: `/ai/retrieve` and `/ai/ask` landed on the backend
+  after this document was written).
 - **Multi-world / projects** — `worldId` key-prefix + path segment. Requires a
   backend change first.
 - **Real-time / bulk ops** — push-invalidation and batch flows. No backend support

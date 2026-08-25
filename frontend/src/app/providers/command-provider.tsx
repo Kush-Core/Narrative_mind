@@ -1,9 +1,10 @@
-import { PanelLeftIcon, RotateCcwIcon, SearchIcon } from "lucide-react"
+import { MessageCircleQuestionIcon, PanelLeftIcon, RotateCcwIcon, SearchIcon } from "lucide-react"
 import { type ReactNode, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 
 import { CommandPalette } from "@/app/shell/CommandPalette"
 import { navItems } from "@/app/shell/navigation"
+import { paths } from "@/routes/paths"
 import type { Command } from "@/shared/commands/registry"
 import { useCommandHotkeys, useRegisterCommands } from "@/shared/commands/useCommand"
 import { useUiStore } from "@/shared/store/ui-store"
@@ -20,8 +21,10 @@ import { useUiStore } from "@/shared/store/ui-store"
  */
 export function CommandProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const togglePalette = useUiStore((state) => state.toggleCommandPalette)
   const toggleSidebar = useUiStore((state) => state.toggleSidebar)
+  const toggleAskDock = useUiStore((state) => state.toggleAskDock)
   const resetLayout = useUiStore((state) => state.resetLayout)
 
   const commands = useMemo<Command[]>(
@@ -54,6 +57,21 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         run: toggleSidebar,
       },
       {
+        // Distinct from the `/ask` destination the navigation model already
+        // registers: that one *goes* to Ask, this one brings Ask to whatever is
+        // already on screen without leaving it. On the `/ask` route itself the
+        // full page already *is* that panel, so the command is disabled there
+        // rather than opening a second, redundant copy of it in a dock.
+        id: "workspace.ask",
+        label: "Ask about this world",
+        group: "workspace",
+        icon: MessageCircleQuestionIcon,
+        shortcut: "mod+i",
+        keywords: ["ai", "question", "dock", "panel"],
+        enabled: pathname !== paths.ai.ask(),
+        run: toggleAskDock,
+      },
+      {
         id: "workspace.reset-layout",
         label: "Reset layout",
         group: "workspace",
@@ -62,7 +80,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         run: resetLayout,
       },
     ],
-    [navigate, togglePalette, toggleSidebar, resetLayout],
+    [navigate, pathname, togglePalette, toggleSidebar, toggleAskDock, resetLayout],
   )
 
   useRegisterCommands(commands)

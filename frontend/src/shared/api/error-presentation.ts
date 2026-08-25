@@ -67,6 +67,10 @@ export function toUserMessage(error: unknown): string {
     case "server":
       return "The server encountered an error. Please try again."
     default:
+      // `provider_unavailable` deliberately falls through: the backend's own
+      // message ("The language model is unreachable right now — try again
+      // shortly.") is written for a human and says more than a generic line
+      // here could.
       return apiError.message
   }
 }
@@ -87,6 +91,10 @@ export function toUserTitle(error: unknown): string {
       return "Invalid data"
     case "authentication_error":
       return "Sign-in required"
+    case "authorization_error":
+      return "Not allowed"
+    case "provider_unavailable":
+      return "Model unavailable"
     case "network":
     case "timeout":
       return "Connection problem"

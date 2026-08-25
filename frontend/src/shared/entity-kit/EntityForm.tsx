@@ -111,6 +111,20 @@ export function EntityForm<TForm extends FieldValues>({
                     ? `${currentValue.length}/${spec.maxItems}`
                     : undefined
               }
+              action={spec.assist?.({
+                value: currentValue,
+                // `values` is React Hook Form's watched snapshot, typed as a
+                // deep-partial of the form. An assist reads sibling fields by
+                // name, so it is narrowed to `unknown` at this boundary rather
+                // than leaking the form's shape into the assist contract.
+                readField: (name) => (values as UnknownRecord)[name],
+                apply: (value) =>
+                  // `shouldDirty` matters: the update diff compares against the
+                  // loaded entity, so a value written without it would be
+                  // saved but reported as "No changes to save".
+                  form.setValue(spec.name, value as never, { shouldDirty: true }),
+                disabled: isSubmitting,
+              })}
               className={cn(spec.span === "full" && "sm:col-span-2")}
             >
               {({ id, describedBy, invalid }) => {
