@@ -44,12 +44,38 @@ with `core`, `domain`, and `providers` as leaves.
 - **`core/`** — config, logging, exception hierarchy, error handlers.
 - **`db/`** — async Neo4j driver lifecycle, session dependency, idempotent migrations.
 
-The full Graph RAG design — including the two decisions worth understanding
-before touching this code (§2.2: why embedding models are never mixed within
-one database; §2.3: exact owner-scoped cosine similarity rather than
-`db.index.vector.queryNodes()`, which ignores `owner_id` and can leak another
-account's entities into a caller's results) — is in
-[`../docs/backend/GRAPH_RAG_PLAN.md`](../docs/backend/GRAPH_RAG_PLAN.md).
+### The two Graph RAG decisions worth knowing before you change anything
+
+**1. Retrieval is an exact, owner-scoped cosine scan — not
+`db.index.vector.queryNodes()`.** Neo4j's vector index returns the global
+top-K across the *entire database* and has no pre-filter. In a single-tenant
+app that is fine. Here every node carries an `owner_id`, so asking the index
+for the top 10 can return ten nodes belonging to ten other accounts, and the
+owner-scoped post-filter then yields **zero results for a caller whose world is
+perfectly healthy**. The failure gets worse the more accounts exist — which
+means it passes every test written against a fresh database and degrades
+silently in production. `EmbeddingRepository` instead matches the owner's nodes
+first and scores each with `vector.similarity.cosine()` (Neo4j 5.18+), so
+scoping lives in the `MATCH` itself and cannot be forgotten. That is exact,
+needs no migration, and is comfortably fast for worlds of tens to low
+thousands of nodes — the starter world is 27 entities. The index becomes worth
+revisiting only once a *single* owner's world is large enough that the linear
+scan hurts; graduating to it later is a repository-internal change, invisible
+above that layer. `tests/test_rag_isolation.py` is the regression test.
+
+**2. Embedding models are never mixed within one database.** Vectors from two
+different models are not comparable; a width mismatch at least errors loudly,
+but two models of equal width fail *silently*. Every node therefore stores
+`embedding_model` and `embedded_at` alongside its vector, which is what makes
+staleness detectable and `scripts/backfill_embeddings.py` idempotent. The
+constraint is per database, not global — local Neo4j and Aura are separate
+databases, so Ollama-local / Google-hosted is correct as long as each side is
+internally consistent and data is never copied between them without a
+backfill. What the split costs is tuning transfer: cosine score
+*distributions* differ per model, so any absolute threshold tuned against one
+model is meaningless against another's. The mitigation is structural — rank by
+score and take top-K, never gate on a minimum score. That is why no
+`RAG_MIN_SCORE` setting exists.
 
 ## Prerequisites
 
@@ -252,8 +278,36 @@ the test suite proves it *runs* right. It says nothing about whether it
 *retrieves well*. That's a separate, measured question, and this project
 answers it with a graph-recall metric: given a question whose answer is known
 to live in a specific set of entities and relationships in the starter world,
-what fraction of that set actually reaches the serialized context block. See
-`docs/backend/graph-recall-evaluation.md` for the full metric design.
+what fraction of that set actually reaches the serialized context block.
+
+**The metric, in full.** For each of the 12 hand-authored queries in the
+`verge-starter-v1` dataset (`evaluation/dataset.py`), a *reference graph* names
+the entity slugs `R_q` and the directed edges `E_q` that an answer genuinely
+depends on. Retrieval runs, and the entities and relationships that survive
+into the context block form the *retrieved graph* `Ĝ_q`, `Ê_q`.
+
+| Metric | Definition | Role |
+|---|---|---|
+| **Node recall (macro)** | mean over queries of `\|R_q ∩ Ĝ_q\| / \|R_q\|` | **Primary** |
+| **Edge recall (macro)** | mean of `\|E_q ∩ Ê_q\| / \|E_q\|` over queries with `\|E_q\| > 0` | **Co-primary** — reported beside node recall, never blended into it |
+| Node/edge recall (micro) | pooled numerators over pooled denominators | Supporting: a large macro/micro gap localizes failure to the big fan-out queries |
+| Seed recall | node recall against the *vector seeds* alone, before expansion | Supporting |
+| Expansion gain | node recall − seed recall, always ≥ 0 | Supporting: what the graph traversal buys over vector search alone |
+| Per-label node recall | micro node recall restricted to each label | Diagnostic: `canonical_text` differs per label, so label bias is real and actionable |
+| Anchor hit rate | fraction of queries whose declared anchors all reach the seeds | Diagnostic: high node recall with a low anchor rate means expansion is carrying a weak vector step |
+
+Macro is primary because reference sizes vary from 1 to 7 entities and each
+hand-authored question deserves equal weight. Recall only, no precision: the
+context block is *deliberately* over-inclusive — expansion pulls in neighbours
+precisely so the model can find the connection — so penalising extra entities
+would be penalising the design.
+
+Edge cases are decided rather than defaulted, and `tests/test_graph_recall.py`
+pins each one: a query with an empty reference *node* set is a dataset
+validation error (recall would be undefined); a query with an empty reference
+*edge* set is excluded from the edge aggregates entirely — scoring it 0.0
+would deflate the number and 1.0 would inflate it; an empty retrieved graph
+scores 0.0, which is well-defined because `|R_q| ≥ 1` always.
 
 **`uv run pytest -q` is offline and deterministic.** It uses
 `FakeEmbeddingProvider`, a SHA-256 stub with no semantics whatsoever, so it
@@ -328,14 +382,28 @@ Expansion gain                      +0.213        graph expansion over vector se
 Anchor hit rate                     1.000
 ```
 
+The script also takes `--provider`, `--model`, `--dimensions`, `--top-k`,
+`--max-entities`, and `--json <path>` to write the full report out
+alongside the table.
+
 Running the same account again at `--depth 2` reproduces the tradeoff the
 metric exists to surface: node recall was already at its ceiling from depth
 1's expansion, so depth 2 buys nothing more there, while edge recall *drops*
-(0.708 → 0.661 in that same run) — the 4000-character context budget
-truncates the larger depth-2 edge set in Cypher's `collect(DISTINCT r)`
-order, which carries no ordering guarantee (see §13.2 of the plan doc). A
-node-only metric would never have shown this; it's the reason the metric
-reports edge recall as a co-primary number instead of folding it away.
+(0.708 → 0.661 in that same run). The cause is the 4000-character context
+budget in `retrieval_service.py`: it truncates the larger depth-2 edge set in
+Cypher's `collect(DISTINCT r)` order, which carries no stability guarantee.
+Two consequences worth carrying: **exact edge-recall assertions are only sound
+at depth 1**, and a depth-2 edge-recall figure is a *noisy* number that can
+move between runs on identical data. A node-only metric would never have shown
+any of this; it's the reason the metric reports edge recall as a co-primary
+number instead of folding it away.
+
+Two more limits to read the numbers against. `RAG_MAX_CONTEXT_ENTITIES=30`
+never binds on a 27-entity world, so a default run says nothing about whether
+the entity cap behaves — `--max-entities` exists to induce it deliberately.
+And `RAG_EXPAND_DEPTH` is clamped to 1–2 in both `graph_repo.expand` and
+`RetrieveRequest`, so depth 0 and depth 3+ cannot be benchmarked at all;
+depth 0 is covered for free by the seed-recall number.
 
 ### Why the split
 
@@ -364,6 +432,7 @@ uv run uvicorn narrative_mind.main:app --reload
 
 | Method & path | Auth | Purpose |
 |---|---|---|
+| `GET /` | — | 307 to `/docs`, so the bare domain isn't a JSON 404 (hidden from the schema) |
 | `GET /health` | — | Liveness probe |
 | `POST /auth/register` | — | Create an account |
 | `POST /auth/login` | — | Exchange credentials for a bearer token |
@@ -604,18 +673,35 @@ uv run ruff format .       # format
 uv run pytest -q           # run the test suite
 ```
 
-The model tests (`tests/test_pydantic_models.py`), the AI stub-provider test
-(`tests/test_ai_service.py`), and one pure-fake retrieval test
-(`test_context_entity_cap_holds` in `tests/test_retrieval.py`) run without
-external services. The remaining tests are integration tests that exercise
-real Cypher against the configured Neo4j instance, so **Neo4j must be
-running** for the full suite to pass. Each integration test uses uniquely
-suffixed names and deletes the nodes it creates. RAG tests never need a real
-Ollama/Google reachable — `get_embedder` is overridden with a deterministic
-`FakeEmbeddingProvider` for the whole suite (`tests/conftest.py`), and
-`tests/test_rag.py`/`test_rag_isolation.py` override `get_llm` with a stub per
-test. `tests/test_rag_isolation.py` is the one worth reading even if you skip
-the rest — it is the regression test for §2.3 of the RAG plan (exact
-owner-scoped cosine vs. `db.index.vector.queryNodes()`), proving one
+97 tests, of which 42 need nothing but Python:
+
+- `tests/test_pydantic_models.py` (9) — the DTO triads and `Page[T]`.
+- `tests/test_graph_recall.py` (25) — metric correctness, aggregation, the
+  edge cases above, and dataset integrity: every annotated slug and edge is
+  checked to exist in `domain/starter_world.py`, direction-sensitively.
+- `tests/test_ai_service.py` (2) — the AI service against a stub provider.
+- The four `canonical_text` tests in `tests/test_embeddings.py`.
+- `test_context_entity_cap_holds` in `tests/test_retrieval.py`, and
+  `test_root_redirects_to_docs` in `tests/test_health.py` (which builds the
+  app without its lifespan, so it touches neither Neo4j nor auth).
+
+The remaining 55 are integration tests that exercise real Cypher against the
+configured Neo4j instance, so **Neo4j must be running** for the full suite to
+pass. Each registers its own account, works inside that account's world, and
+deletes the account and everything it owns afterwards — a suite run leaves the
+database exactly as it found it.
+
+No test ever calls a real embedding or chat provider. `get_embedder` is
+overridden with the deterministic `FakeEmbeddingProvider` for the whole suite
+(`tests/conftest.py`), and `tests/test_rag.py` / `tests/test_rag_isolation.py`
+override `get_llm` with a stub per test. The flip side is stated plainly
+because it matters: **nothing in `pytest` can tell you retrieval is *good*.**
+`FakeEmbeddingProvider` is a SHA-256 stub with no semantics at all — that is
+what [Real Embedding Evaluation](#real-embedding-evaluation) is for.
+
+`tests/test_rag_isolation.py` is the one worth reading even if you skip the
+rest: it is the regression test for the multi-tenancy trap described under
+[Architecture](#the-two-graph-rag-decisions-worth-knowing-before-you-change-anything)
+— exact owner-scoped cosine vs. `db.index.vector.queryNodes()` — proving one
 account's retrieval can never surface another's entity even when the two are
 byte-identical.

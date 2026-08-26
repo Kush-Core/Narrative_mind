@@ -67,7 +67,7 @@ export interface HttpClientOptions {
   credentials?: RequestCredentials
 }
 
-/** HTTP verbs the backend exposes (analysis §API Surface). */
+/** HTTP verbs the backend exposes (backend/README.md, "API surface (V1)"). */
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE"
 
 export class HttpClient {

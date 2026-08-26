@@ -2,14 +2,17 @@
 
 Pure functions only — no I/O, no Neo4j, no provider. Same inputs always give
 the same outputs. This is the module that must be provable, so it is kept
-free of anything that would make it hard to test in isolation (see
-docs/backend/graph-recall-evaluation.md §5).
+free of anything that would make it hard to test in isolation.
+
+The metric definitions, their aggregation rules, and the decided behaviour for
+every empty-set case are tabulated in the backend README under "Real Embedding
+Evaluation"; `tests/test_graph_recall.py` pins each of them.
 
 Node identity is exact-id matching through `slug_by_id` (`entity_id(owner_id,
 slug)` — see `dataset.slug_index`); nothing here does name, alias, or fuzzy
 matching. `RetrievalResult.entities`/`.relationships` are trusted as a
 faithful proxy for the serialized context block — a guarantee `_serialize`
-makes explicit in its own docstring (`services/retrieval_service.py:97`).
+makes explicit in its own docstring (`services/retrieval_service.py`).
 """
 
 from narrative_mind.domain.rag import RetrievalResult, RetrievedEntity, RetrievedRelationship

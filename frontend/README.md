@@ -49,6 +49,10 @@ npm run dev            # http://localhost:5173
 [`../docs/frontend/FRONTEND_FILE_STRUCTURE.md`](../docs/frontend/FRONTEND_FILE_STRUCTURE.md)
 for the full rationale.
 
+The slices are `auth`, `characters`, `locations`, `factions`, `events`,
+`graph`, `ai`, and `system` (the `/health` poll behind the status bar).
+`world` is a reserved, empty slice — see [Known gaps](#known-gaps).
+
 ## Features implemented
 
 Every item below is wired end-to-end against a live backend route:
@@ -66,16 +70,49 @@ Every item below is wired end-to-end against a live backend route:
 - **Shortest path** (`features/graph`, `ShortestPathPage`) — source/target
   character pickers backed by `GET /graph/shortest-path`, rendering the hop
   chain and distance between them.
+- **AI surfaces** (`features/ai`) — all four `/ai/*` endpoints as one
+  capability: an **Ask** page (`/ask`, question on `?q=` so it is
+  deep-linkable) rendering the grounded answer with its `[uuid]` citations
+  parsed into links and the retrieval trace behind it; the same panel as a
+  dockable **Ask dock** (⌘I) beside any screen; an **Extract** page
+  (`/extract`) that resolves proposed entities against the world you already
+  have; and a **Suggest** assist in every entity form's description field,
+  reached through the entity engine's `EntityFieldSpec.assist` seam so
+  `entity-kit` holds no AI code.
+- **Shell** (`app/shell`) — explorer sidebar, breadcrumbs, resizable panels,
+  a ⌘K command palette rendered entirely from the command registry, and a
+  status bar whose connection indicator is the polled `/health` query from
+  `features/system`.
+
+All four AI calls are mutations with no query keys and no cache: an LLM answer
+is not server state, so re-asking must genuinely re-ask. Cancellation, the
+cancel-is-not-a-failure rule, and result retention across a cancel all live in
+one place (`queries/useAiRequest.ts`) so the four cannot disagree about them.
+`/ai/*` also gets its own client deadline (`aiRequestTimeoutMs`, 120s dev /
+60s prod) because the ordinary 15s one aborts a local Ollama extraction that
+was going to succeed.
 
 ## Known gaps
 
-- **`features/ai`** and **`features/world`** are reserved, empty slices
-  (`.gitkeep` only, no components yet). The backend already exposes
-  `POST /ai/describe` and `POST /ai/extract` — see
-  [`../backend/README.md`](../backend/README.md) — but nothing in the UI
-  calls them.
+- **`features/world`** is a reserved, empty slice (`.gitkeep` only). The
+  workspace's landing page is `WorkspaceWelcome` — a navigational teaching
+  surface, deliberately not a dashboard of empty statistics — and the world
+  overview and cross-entity palette search planned as **M7** are unbuilt: ⌘K
+  searches commands and destinations, not entities.
+- **M8 (polish, keyboard, accessibility, motion) has never been run as its own
+  pass.** Much of its substance landed alongside later milestones — the
+  keyboard map and `Kbd` hints, reduced-motion handling in `globals.css`,
+  token-driven empty/error/loading states — but the audit itself is
+  outstanding.
+- **Extraction cannot write back.** `/ai/extract` returns names, not ids, and
+  persists nothing by backend design, so the Extract page proposes and matches
+  but never creates.
+- **Citations do not highlight graph nodes.** `useGraphInteraction` keeps
+  selection as deliberately view-scoped React state rather than in the Zustand
+  store, so driving it from the dock would mean either contradicting that or
+  adding a cross-slice channel. Citations link to entity detail pages instead.
 - There is no world/campaign switcher — the app currently operates on a
-  single implicit world per backend instance.
+  single implicit world per account.
 
 ## Deployment (Vercel)
 
@@ -84,7 +121,7 @@ Every item below is wired end-to-end against a live backend route:
 2. Framework preset **Vite** (auto-detected). Build command `npm run build`,
    output directory `dist`.
 3. Set env var `VITE_API_BASE_URL` to the deployed **backend**'s URL (see
-   [`../backend/README.md`](../backend/README.md#deployment-vercel--neo4j-aura--groq)).
+   [`../backend/README.md`](../backend/README.md#deployment-vercel--neo4j-aura--groq-and-google)).
    Only `VITE_`-prefixed vars are read by the build — Vercel may suggest
    backend-only vars it found in `backend/.env.example` elsewhere in the
    repo; ignore/delete those here, they don't belong to this project.
@@ -112,13 +149,17 @@ don't describe into a failure instead of a silent pass — see
 shapes the suite asserts against (an empty page, a domain 404, FastAPI's
 separate 422).
 
-What is covered: the network spine in `shared/api` — HTTP client, error mapping,
-the `createEntityResource` factory, entity lookup; the shared wire and page
-schemas plus all four per-entity schemas and their mappers; the domain rules in
-`shared/domain` (entity kinds, relationship pairing and direction); and the
-graph's pure layers — `build-graph-model`, `connect-rules`, and the Cytoscape
-translation in `to-elements`. Every test is pure TypeScript, so the whole suite
-runs in a couple of seconds with no backend.
+**372 tests across 26 files.** What is covered: the network spine in
+`shared/api` — HTTP client, error mapping, the `createEntityResource` factory,
+entity lookup; the shared wire and page schemas plus all four per-entity
+schemas and their mappers; the domain rules in `shared/domain` (entity kinds,
+relationship pairing and direction); the relationship resource; the UI store's
+panel-layout derivation; the graph's pure layers — `build-graph-model`,
+`connect-rules`, and the Cytoscape translation in `to-elements`; and the AI
+slice's resource layer plus `parseAnswer`, which chips retrieved ids out of an
+answer's inline `[uuid]` markers and drops UUID-shaped ids that were never
+retrieved. Every test is pure TypeScript, so the whole suite runs in a couple
+of seconds with no backend.
 
 Tests run in Vitest's `node` environment and only `*.test.ts` is collected;
 `stylesheet.test.ts` opts into jsdom with a docblock because the stylesheet

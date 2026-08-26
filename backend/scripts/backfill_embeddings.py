@@ -12,8 +12,8 @@ primary one. Run it:
     turned on — accounts registered before that have no vectors at all;
   - again, against every account, whenever EMBEDDING_PROVIDER or the
     embedding model changes — vectors from two different models are not
-    comparable (§2.2 of the RAG plan), so switching models means the whole
-    corpus is stale until this runs;
+    comparable, so switching models means the whole corpus is stale until
+    this runs;
   - ad hoc, for one account, if a synchronous write ever failed partway
     through (e.g. the provider was briefly unreachable).
 

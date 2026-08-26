@@ -25,11 +25,25 @@ uv run pytest src/narrative_mind/tests/test_characters.py -q          # one file
 uv run pytest src/narrative_mind/tests/test_characters.py::test_name -q  # one test
 ```
 
-Only `tests/test_pydantic_models.py` and the AI stub-provider test in
-`tests/test_ai_service.py` run standalone; every other test fires real Cypher
-against the configured Neo4j instance. Each integration test registers its own
-account and cleans up everything that account owns, so the suite is
-self-isolating and idempotent to re-run.
+97 tests. 42 run standalone: `tests/test_pydantic_models.py`,
+`tests/test_graph_recall.py` (the whole file — pure metric and dataset
+validation), `tests/test_ai_service.py`, the `canonical_text` tests in
+`tests/test_embeddings.py`, `test_context_entity_cap_holds` in
+`tests/test_retrieval.py`, and `test_root_redirects_to_docs` in
+`tests/test_health.py`. The other 55 fire real Cypher against the configured
+Neo4j instance. Each integration test registers its own account and cleans up
+everything that account owns, so the suite is self-isolating and idempotent to
+re-run. No test ever reaches a real embedding or chat provider.
+
+**Real-model retrieval evaluation** is deliberately outside `pytest` — it needs
+a reachable provider, makes real network calls, and its numbers move when a
+model changes:
+
+```bash
+uv run python scripts/precompute_starter_world_embeddings.py
+uv run python scripts/backfill_embeddings.py you@example.com   # or --all
+uv run python scripts/evaluate_graph_recall.py you@example.com --depth 1
+```
 
 **Frontend** (run from `frontend/`):
 
@@ -116,25 +130,34 @@ Both axes are `lru_cache`d builder functions mirroring each other
 `_build_ollama_embedder`/`_build_google_embedder`); nothing above
 `providers/deps.py` knows which concrete implementation is live.
 
-### Embeddings / Graph RAG (in progress)
+### Embeddings / Graph RAG
 
-An in-progress Graph RAG feature layers on top of the CRUD API: every entity
-gets a vector embedding of its own canonical text (name, aliases,
-status/region/ideology, description), written synchronously on create and
-update via `EmbeddingService`/`EmbeddingRepository` — synchronously because
+Graph RAG is shipped end to end (`/ai/retrieve`, `/ai/ask`, and a UI over
+both). Every entity gets a vector embedding of its own canonical text (name,
+aliases, status/region/ideology, description), written synchronously on create
+and update via `EmbeddingService`/`EmbeddingRepository` — synchronously because
 `BackgroundTasks` are not reliable on Vercel's serverless runtime, so a
 fire-and-forget embed could simply never run.
 
-The governing document is `docs/backend/GRAPH_RAG_PLAN.md` — read it before
-touching anything embedding- or retrieval-related; it defines seven phases and
-three load-bearing decisions made up front, the sharpest being **§2.3: exact
-owner-scoped cosine similarity, not `db.index.vector.queryNodes()`**, for V1.
-The reason matters: Neo4j's vector index returns the global top-K across the
-*entire* database with no pre-filter, so in this multi-tenant schema it can
-return another account's nodes and starve the caller after an owner-scoped
-post-filter — a bug invisible on a fresh test database that degrades silently
-in production. Reach for the vector index only once the plan says the linear
-scan has actually become a problem.
+Two decisions here are load-bearing; `backend/README.md` explains both at
+length, but do not undo either without reading it first.
+
+**Retrieval is an exact owner-scoped cosine scan, never
+`db.index.vector.queryNodes()`.** Neo4j's vector index returns the global top-K
+across the *entire* database with no pre-filter, so in this multi-tenant schema
+it can return another account's nodes and starve the caller after an
+owner-scoped post-filter — a bug invisible on a fresh test database that
+degrades silently in production. Scoping must live in the `MATCH` itself.
+`tests/test_rag_isolation.py` is the regression test. The vector index only
+becomes worth revisiting once one owner's world is large enough that the linear
+scan actually hurts.
+
+**Embedding models are never mixed within one database**, and there is no
+minimum-score setting on purpose — cosine score distributions differ per model,
+so an absolute threshold tuned against one is meaningless against another's.
+Rank by top-K instead. Switching `EMBEDDING_PROVIDER` or its model stales every
+vector in that database at once and requires a full backfill; `embedding_model`
+and `embedded_at` on each node are what make that detectable.
 
 The starter world's 27 entities get their embeddings from a precomputed,
 model-named JSON file (`domain/starter_world_embeddings.<model>.json`,
@@ -149,27 +172,45 @@ primary path.
 
 Feature-sliced: `src/app` (composition root/shell), `src/routes` (URL map),
 `src/features` (vertical slices — `auth`, `characters`, `locations`,
-`factions`, `events`, `graph`; `ai` and `world` are reserved/empty), `src/
-shared` (design system, entity engine, API core), `src/styles` (dark-only
-design tokens). All four CRUD entity features are built on one
-`createEntityResource` factory over the four parallel backend routers rather
-than four hand-written copies — extend that factory, don't duplicate it, when
-adding entity-level behavior.
+`factions`, `events`, `graph`, `ai`, `system`; only `world` is still
+reserved/empty), `src/shared` (design system, entity engine, API core),
+`src/styles` (dark-only design tokens). All four CRUD entity features are built
+on one `createEntityResource` factory over the four parallel backend routers
+rather than four hand-written copies — extend that factory, don't duplicate it,
+when adding entity-level behavior.
+
+The `ai` slice has **two** entry points, and the split is load-bearing:
+`features/ai/index.ts` (the routed pages and the dock) and
+`features/ai/assist.ts` (just `DescribeAssist`, which the four entity
+descriptors import). Reaching `DescribeAssist` through `index.ts` would make
+every entity chunk pull the Ask and Extract pages behind it —
+`shared/entity-kit/route-params.ts` carries the same warning after one
+convenience import there once dragged ~137 kB into the eager bundle. That kind
+of regression typechecks, lints, and passes the whole suite; only the built
+chunks show it.
+
+All four `/ai/*` calls are mutations with no query keys and no cache — an LLM
+answer is not server state. Cancellation semantics live once, in
+`features/ai/queries/useAiRequest.ts`.
 
 `docs/frontend/` is the source of truth for structure, state management, and
 API integration — read the relevant doc there before restructuring anything
 non-trivial on this side. Tests are network-boundary-mocked with MSW
 (`onUnhandledRequest: "error"`, so an unmodeled request fails loudly rather
-than passing silently) and cover the API/schema/domain-rule/graph-model
-layers; there are no component tests yet (scheduled as milestone M8 in
-`docs/frontend/IMPLEMENTATION_PLAN.md`).
+than passing silently) and cover the API/schema/domain-rule/graph-model/AI
+layers — 372 tests across 26 files, all pure TypeScript. There are still no
+component tests (scheduled as milestone M8 in
+`docs/frontend/IMPLEMENTATION_PLAN.md`), so rendering, forms, and interaction
+are verified by hand.
 
 ## Cross-cutting notes
 
-- `docs/REPOSITORY_ANALYSIS.md` is a **frozen snapshot as of 2026-07-18**,
-  from when the repo was backend-only — useful for internals no README
-  covers (request lifecycle, Cypher patterns, DI, error handling), but check
-  its header for what's since changed before trusting a section.
+- **The three READMEs are the current state of the project.** Several source
+  comments still cite backend design documents that no longer ship in the repo
+  (`docs/backend/GRAPH_RAG_PLAN.md` and its §-numbers, a graph-recall metric
+  design, `docs/REPOSITORY_ANALYSIS.md`) — the decisions they were cited for
+  live in `backend/README.md` now. `docs/frontend/` does still ship, and
+  `IMPLEMENTATION_PLAN.md` there is the per-milestone build log.
 - Backend secrets live in `backend/.env` (gitignored) — never read it into a
   commit or a shared artifact. `.env.example` holds placeholders only.
 - Env var changes on Vercel don't apply to already-built deployments —

@@ -95,8 +95,10 @@ class EmbeddingRepository:
         Exact, owner-scoped cosine — not `db.index.vector.queryNodes()`. That
         index returns the global top-K across the whole database with no
         pre-filter, so in a multi-tenant schema it can hand back another
-        account's nodes and starve this owner after an owner_id post-filter
-        (§2.3 of the RAG plan). Scoping has to be in the MATCH itself.
+        account's nodes and starve this owner after an owner_id post-filter.
+        Scoping has to be in the MATCH itself. `tests/test_rag_isolation.py` is
+        the regression test; the backend README explains the trade under "The
+        two Graph RAG decisions worth knowing before you change anything".
         """
         return await self._session.execute_read(
             self._find_similar_tx, self._owner_id, query_vector, top_k

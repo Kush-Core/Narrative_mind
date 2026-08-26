@@ -4,7 +4,8 @@
  * **Why this is infrastructure and not premature abstraction.** The backend's
  * four entity routers, services, and repositories are byte-for-byte parallel —
  * same verbs, same pagination contract, same PATCH semantics, same error shapes
- * (analysis §Service Layer, §API Surface). That symmetry is a *verified fact
+ * (backend/src/narrative_mind/{api/routers,services,repositories}/). That
+ * symmetry is a *verified fact
  * about the backend*, not a guess about the future, so encoding it once is
  * warranted now. What varies between entities is purely declarative — schema,
  * collection, sortable fields, one categorical filter — and is supplied as
@@ -98,8 +99,9 @@ export function createEntityResource<TRead, TCreate, TUpdate, TListParams>(
     update(id, patch, options) {
       const body = omitUndefined(config.toUpdateBody(patch))
 
-      // The backend rejects an empty update with a 422
-      // (`if not self.model_fields_set` — analysis §DTOs). Reaching here with
+      // The backend rejects an empty update with a 422 — `if not
+      // self.model_fields_set` on every *Update DTO (see
+      // backend/src/narrative_mind/domain/character.py). Reaching here with
       // nothing to send is a caller bug: `diffForUpdate` is what decides whether
       // an update should happen at all.
       if (Object.keys(body).length === 0) {

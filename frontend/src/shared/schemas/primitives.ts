@@ -14,8 +14,9 @@ import { z } from "zod"
 /**
  * Node identifiers are UUID4 strings by default, but the backend accepts any
  * string `id` and its `Character` read model allows an `id`/`uuid` alias
- * (analysis §DTOs). Validating as a non-empty string rather than a strict UUID
- * keeps the client from rejecting ids the backend considers perfectly valid.
+ * (`AliasChoices` in backend/src/narrative_mind/domain/character.py). Validating
+ * as a non-empty string rather than a strict UUID keeps the client from
+ * rejecting ids the backend considers perfectly valid.
  */
 export const IdSchema = z.string().min(1, "id must not be empty")
 
@@ -39,9 +40,10 @@ export const EntityNameSchema = z
  * Optional free text with a backend-declared upper bound.
  *
  * The backend's optional string fields differ only in that bound — `region`
- * ≤120, `ideology` ≤500, `description`/`summary` ≤2000 (analysis §DTOs) — so the
- * shape is written once and the bound is the parameter. Trimming matches
- * `str_strip_whitespace` on every entity's `model_config`.
+ * ≤120, `ideology` ≤500, `description`/`summary` ≤2000
+ * (backend/src/narrative_mind/domain/) — so the shape is written once and the
+ * bound is the parameter. Trimming matches `str_strip_whitespace` on every
+ * entity's `model_config`.
  */
 export function boundedTextSchema(max: number) {
   return z.string().trim().max(max, `Must be ${max} characters or fewer`)
@@ -50,7 +52,7 @@ export function boundedTextSchema(max: number) {
 /** Mirrors the backend's shared `description`/`summary` bound (≤2000). */
 export const LongTextSchema = boundedTextSchema(2000)
 
-/** `SortOrder` (analysis §DTOs — `common.py`). */
+/** `SortOrder` (backend/src/narrative_mind/domain/common.py). */
 export const SortOrderSchema = z.enum(["asc", "desc"])
 export type SortOrder = z.infer<typeof SortOrderSchema>
 

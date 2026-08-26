@@ -17,7 +17,7 @@ from narrative_mind.evaluation.dataset import (
 from narrative_mind.evaluation.graph_recall import aggregate, score_query
 from narrative_mind.evaluation.models import EvalQuery, RunConfig
 
-# --- §10.3 dataset tests -----------------------------------------------------
+# --- dataset integrity -------------------------------------------------------
 
 
 def test_dataset_validates() -> None:
@@ -94,7 +94,7 @@ def test_starter_world_shape_is_unchanged() -> None:
     assert len(SEED_EDGES) == 69
 
 
-# --- §10.1 unit tests: the pure metric -------------------------------------
+# --- unit tests: the pure metric -------------------------------------------
 #
 # Hand-built RetrievalResult / EvalQuery objects. Slugs here are arbitrary
 # test identifiers, not real starter-world slugs — score_query and aggregate

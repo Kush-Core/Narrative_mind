@@ -1,5 +1,5 @@
 /**
- * The `/health` contract (analysis §API Surface).
+ * The `/health` contract (backend/src/narrative_mind/api/routers/systems.py).
  *
  * Response: `{"status": "ok", "environment": "development"}`.
  *

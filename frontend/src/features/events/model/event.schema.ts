@@ -105,7 +105,8 @@ export const EVENT_SORT_FIELDS = ["timeline_order", "name", "created_at"] as con
 
 /**
  * Event is the only entity with **no categorical filter** — its list endpoint
- * accepts `name_contains` and nothing else (analysis §API Surface). The
+ * accepts `name_contains` and nothing else
+ * (backend/src/narrative_mind/api/routers/events.py). The
  * descriptor simply omits `filter`, and `EntityListView` renders search alone;
  * no engine change was needed to express "this entity has no filter".
  */

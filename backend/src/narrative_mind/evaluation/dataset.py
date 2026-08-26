@@ -1,10 +1,15 @@
 """The graph-recall evaluation dataset: `verge-starter-v1`.
 
 Twelve hand-annotated questions over the starter world (`domain/starter_world.py`),
-each with a reference subgraph derived by an explicit structural rule. See
-docs/backend/graph-recall-evaluation.md §4.2 for the design rationale behind
-every query, and §3.6 for why the dataset is "hand-annotated relevance over
-machine-supplied structure" rather than an invented ground truth.
+each with a reference subgraph derived by an explicit structural rule recorded
+in its own `rule` field — so the annotation is auditable rather than an opaque
+literal, and `validate_dataset` can check every slug and edge against the seed
+world itself.
+
+The relevance judgements are hand-authored, but the *structure* they select
+over is the real seed world rather than an invented one. That is what keeps
+this honest: a query cannot name a node or an edge that does not exist, and
+`tests/test_graph_recall.py` enforces exactly that, direction-sensitively.
 
 Importing this module touches no network and no database — `ALL_SLUGS`,
 `LABEL_BY_SLUG`, and `SEED_EDGES` are derived purely from the Python literals

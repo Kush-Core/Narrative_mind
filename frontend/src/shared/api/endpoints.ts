@@ -9,7 +9,9 @@
  * Paths only: *where* the backend lives is `appConfig.apiBaseUrl`, and the two
  * are joined by the HTTP client.
  *
- * Mirrors the verified surface in docs/REPOSITORY_ANALYSIS.md §API Surface.
+ * Mirrors the backend's route surface — see the "API surface (V1)" table in
+ * backend/README.md, and backend/src/narrative_mind/api/routers/ for the
+ * routers themselves.
  */
 
 import { encodePathSegment } from "@/shared/lib/url"
@@ -39,8 +41,8 @@ export const endpoints = {
 
   /**
    * Generic CRUD paths for any entity collection. The four entity routers are
-   * byte-for-byte parallel (analysis §API Surface), so one builder serves all
-   * of them rather than four identical copies.
+   * byte-for-byte parallel (backend/src/narrative_mind/api/routers/), so one
+   * builder serves all of them rather than four identical copies.
    */
   entity: (collection: EntityCollection) => ({
     list: () => ENTITY_COLLECTIONS[collection],
@@ -50,8 +52,8 @@ export const endpoints = {
 
   /**
    * Relationships are Character-rooted only — there is no generic
-   * `/{collection}/{id}/relationships` (analysis §API Surface), so this is
-   * deliberately not part of the generic entity builder above.
+   * `/{collection}/{id}/relationships`; only `routers/characters.py` mounts one.
+   * So this is deliberately not part of the generic entity builder above.
    */
   characters: {
     relationships: (characterId: string) =>

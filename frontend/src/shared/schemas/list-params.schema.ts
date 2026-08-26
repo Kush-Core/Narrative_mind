@@ -4,8 +4,8 @@
  * All four entity list endpoints accept the *same* parameter set — `limit`,
  * `offset`, `name_contains`, `sort_by`, `order` — differing only in which
  * `sort_by` values they accept and whether they add one categorical filter
- * (analysis §API Surface). That shared core is defined once here; the varying
- * parts are supplied by each entity when it lands.
+ * (backend/src/narrative_mind/api/routers/). That shared core is defined once
+ * here; the varying parts are supplied by each entity when it lands.
  *
  * Because list state lives in the URL (docs/frontend/STATE_MANAGEMENT.md §3),
  * this schema is also what makes a hand-edited query string safe: it coerces,

@@ -3,10 +3,12 @@
 `FakeEmbeddingProvider` throughout — no network. The determinism technique
 (from `tests/test_retrieval.py`): querying with an entity's own canonical text
 reproduces its exact stored vector under the fake embedder (cosine 1.0), so
-`top_k=1` makes that entity the *only* seed — the "oracle anchor" of
-docs/backend/graph-recall-evaluation.md §4.4. This proves the metric agrees
-with the real pipeline; it says nothing about semantic retrieval quality,
-which only `scripts/evaluate_graph_recall.py` against a real provider can.
+`top_k=1` makes that entity the *only* seed. That is the "oracle anchor": with
+the vector step pinned to a known single seed, whatever reaches the context
+block is purely the work of graph expansion, so the expected recall is
+derivable by hand from `domain/starter_world.py`. This proves the metric agrees
+with the real pipeline; it says nothing about semantic retrieval quality, which
+only `scripts/evaluate_graph_recall.py` against a real provider can.
 """
 
 import asyncio
@@ -78,8 +80,9 @@ def test_salt_riots_depth_2_recovers_the_factions(client, client_owner_id, start
     assert row.node_recall == 1.0
     assert row.missing_nodes == []
     # Edge recall is deliberately not asserted here: at depth 2 the 4000-char
-    # budget truncates the induced edge set in Cypher's collect(DISTINCT r)
-    # order, which carries no stability guarantee (§13.2).
+    # budget in retrieval_service.py truncates the induced edge set in Cypher's
+    # collect(DISTINCT r) order, which carries no stability guarantee. Exact
+    # edge-recall assertions are therefore only sound at depth 1.
 
 
 def test_verge_compact_depth_1_is_perfect(client, client_owner_id, starter_world) -> None:

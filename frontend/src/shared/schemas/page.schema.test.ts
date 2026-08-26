@@ -2,8 +2,8 @@
  * The `hasMore` derivation (docs/frontend/API_INTEGRATION_PLAN.md §3, gotcha #1).
  *
  * `Page.has_more` is a plain Python `@property`, not a Pydantic field, so it is
- * never serialized (analysis §Observations #9). Every page in the app depends on
- * this being reconstructed correctly client-side.
+ * never serialized (backend/src/narrative_mind/domain/common.py). Every page in
+ * the app depends on this being reconstructed correctly client-side.
  */
 
 import { describe, expect, it } from "vitest"

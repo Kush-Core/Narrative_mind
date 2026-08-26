@@ -21,7 +21,7 @@
  * respecting one. The real observation is that a picker needs far less than a
  * descriptor carries: an id, a name, and a search. That much is identical across
  * all four collections — the list endpoints are byte-for-byte parallel
- * (docs/REPOSITORY_ANALYSIS.md §API Surface) — so it is expressible in `shared/`
+ * (backend/src/narrative_mind/api/routers/) — so it is expressible in `shared/`
  * with no feature import at all, and the cycle never forms.
  *
  * The cost is a second, smaller schema for data the entity schemas already

@@ -12,8 +12,9 @@ to hand back vectors from any other model. A registration that finds no
 matching file simply creates unembedded nodes — picked up later by
 `find_stale` and `scripts/backfill_embeddings.py` — rather than silently
 supplying stale vectors, which is the failure mode the whole per-model
-naming scheme exists to prevent (see §2.2 of the RAG plan: two embedding
-models' vectors are never interchangeable, even at the same width).
+naming scheme exists to prevent: two embedding models' vectors are never
+interchangeable, and at the same width they fail *silently* rather than
+erroring.
 """
 
 import json

@@ -22,7 +22,7 @@ import { CalendarClockIcon, FlagIcon, type LucideIcon, MapPinIcon, UsersIcon } f
 import { paths } from "@/routes/paths"
 import type { EntityCollection } from "@/shared/api/endpoints"
 
-/** The node labels the backend applies (analysis §Neo4j Integration). */
+/** The node labels the backend applies (backend/src/narrative_mind/repositories/). */
 export const ENTITY_KINDS = ["Character", "Location", "Faction", "Event"] as const
 
 export type EntityKind = (typeof ENTITY_KINDS)[number]

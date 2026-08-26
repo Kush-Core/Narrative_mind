@@ -3,7 +3,8 @@
  *
  * The backend returns `{items, total, limit, offset}` and — critically — does
  * **not** serialize `has_more`: `Page.has_more` is a plain Python `@property`,
- * not a Pydantic field, so it never reaches the wire (analysis §Observations #9,
+ * not a Pydantic field, so it never reaches the wire
+ * (backend/src/narrative_mind/domain/common.py,
  * docs/frontend/API_INTEGRATION_PLAN.md §3 gotcha #1).
  *
  * This module is the single place that fact is handled. `hasMore` is *derived*

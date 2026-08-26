@@ -25,7 +25,7 @@ across both halves of this repository.
 |---|---|
 | [`backend/`](backend/) | Async FastAPI service over Neo4j — entities, relationships, graph traversal, AI endpoints, JWT auth. Setup and full API reference: [`backend/README.md`](backend/README.md) |
 | [`frontend/`](frontend/) | React + TypeScript workspace — a desktop-class, dark-only UI over the API. Setup and feature list: [`frontend/README.md`](frontend/README.md) |
-| [`docs/`](docs/) | Design and analysis documents (see [Documents](#documents) — some are dated snapshots) |
+| [`docs/frontend/`](docs/frontend/) | The frontend's design documents and its per-milestone build log (see [Documents](#documents)) |
 | [`docker-compose.yml`](docker-compose.yml) | Neo4j 5.26 for local development |
 
 The two halves deploy independently as separate Vercel projects; neither
@@ -120,30 +120,45 @@ a test created.
   `POST /ai/ask` generates an answer from it and strips any citation the model
   invents. Isolation is structural, not just filtered: one account's search
   can never surface another's entity, even a byte-identical one.
+- **AI in the workspace** — all four `/ai/*` endpoints are reachable from the
+  UI as one surface: an **Ask** page, plus a ⌘I dock that opens beside whatever
+  screen you are on, rendering the grounded answer with its citations as links
+  into the entities they name and the retrieval trace behind it; an **Extract**
+  page that reads a passage and resolves what it finds against the world you
+  already have (read-only — nothing is written); and a **Suggest** button in
+  every entity form's description field.
 
 ## Not built yet
 
 Roadmap capabilities named in the design documents but absent from the code:
-**Timeline**, **Rich Text Editing**, **World Encyclopedia**, **AI Reasoning**,
-**Consistency Checking**, and **Knowledge Search**.
+**Timeline**, **Rich Text Editing**, **World Encyclopedia**, **Consistency
+Checking**, and **Knowledge Search**.
 
 Also outstanding:
 
-- No UI reaches any `/ai` endpoint, including `/ai/retrieve` and `/ai/ask` —
-  `frontend/src/features/ai/` and `features/world/` are reserved, empty
-  slices. Graph RAG is fully implemented backend-side and exercised by
-  `curl`/the interactive docs, but there is no chat or retrieval UI yet.
-- One world per account, and no switcher — an account cannot keep two separate
-  worlds or share one with somebody else.
-- The frontend's planned world-overview/global-search milestone (M7) and its
-  accessibility and polish pass (M8) are unstarted.
+- **World overview and global search (frontend M7)** — the workspace's landing
+  page is a navigational welcome screen, not a world summary, and the ⌘K
+  palette searches commands and destinations but not entities.
+  `frontend/src/features/world/` is still a reserved, empty slice.
+- **Frontend polish and accessibility pass (M8)** — much of it landed
+  opportunistically alongside later milestones (keyboard map, `Kbd` hints,
+  reduced-motion handling, token-driven states), but the milestone has never
+  been run as its own audit.
+- **No component tests on the frontend.** The suite is pure TypeScript and
+  stops at the renderer boundary; rendering, forms, and interaction are
+  verified by hand.
+- **One world per account, and no switcher** — an account cannot keep two
+  separate worlds or share one with somebody else.
+- **Extraction does not write back.** `/ai/extract` returns names, not ids,
+  and persists nothing, so the Extract page proposes and matches but cannot
+  create.
 
 ## Tech stack
 
 | | |
 |---|---|
 | **Backend** | Python 3.12, FastAPI (async), Neo4j 5.26 via Bolt (vector similarity search), Pydantic v2, PyJWT, pwdlib/argon2, Ollama/Groq (chat), Ollama/Google Gemini (embeddings), uv, ruff, pytest |
-| **Frontend** | React 19, TypeScript, Vite, Tailwind v4 (CSS-first), shadcn/ui + Radix, TanStack Query & Table, Zustand, React Hook Form + Zod, Cytoscape, Vitest + MSW |
+| **Frontend** | React 19, TypeScript, Vite, Tailwind v4 (CSS-first), shadcn/ui + Radix, TanStack Query & Table, Zustand, React Hook Form + Zod, Cytoscape, cmdk, Sonner, Vitest + MSW |
 | **Deployed on** | Vercel (two projects), Neo4j Aura, Groq, Google Gemini |
 
 ## Documents
@@ -153,11 +168,12 @@ Also outstanding:
   milestone plan. `IMPLEMENTATION_PLAN.md` carries as-built notes per milestone
   and is the closest thing to a build log; the structural documents predate the
   auth slice and some later refactors.
-- [`docs/REPOSITORY_ANALYSIS.md`](docs/REPOSITORY_ANALYSIS.md) — a deliberately
-  frozen inventory of the backend **as of 2026-07-18, when the repository was
-  backend-only**. Useful for internals no README covers (request lifecycle,
-  Cypher patterns, DI, error handling); its header lists everything that has
-  changed since, and each superseded section says so inline.
+
+The three READMEs are the current state of the project. A few source comments
+still cite backend design documents (a Graph RAG plan, a graph-recall metric
+design, a 2026-07-18 repository analysis) that are no longer part of the
+repository; the decisions they were cited for are summarised in
+[`backend/README.md`](backend/README.md) instead.
 
 ## Testing
 
@@ -166,8 +182,10 @@ cd backend  && uv run pytest -q      # Neo4j must be running for the integration
 cd frontend && npm run test          # Vitest + MSW, no backend required
 ```
 
-The backend's model tests and AI stub-provider test run standalone; the rest
-execute real Cypher against the configured Neo4j instance. Each of those
+The backend suite is 97 tests; 42 of them — the Pydantic models, the whole
+graph-recall metric and its dataset validation, the AI stub-provider test, the
+canonical-text tests, and two others — need nothing but Python. The remaining
+55 execute real Cypher against the configured Neo4j instance. Each of those
 registers its own account and runs inside that account's world, so tests are
 isolated from each other by the same ownership rule that isolates users, and
 each one deletes its accounts and everything they own afterwards — a suite run
@@ -176,10 +194,20 @@ Ollama/Groq/Google — `tests/conftest.py` overrides the embedding provider with
 a deterministic fake for the whole suite, and the chat provider is stubbed per
 test — and `test_rag_isolation.py` proves one account's retrieval can never
 surface another's entity, even a byte-identical one, which is the regression
-test for the multi-tenancy trap in `db.index.vector.queryNodes()` (see
-`docs/backend/GRAPH_RAG_PLAN.md` §2.3). The frontend suite covers the API,
-schema, domain-rule, and graph-model layers with the backend mocked at the
-network boundary; it has no component tests yet.
+test for the multi-tenancy trap in `db.index.vector.queryNodes()` (explained
+in full under
+[the two Graph RAG decisions](backend/README.md#the-two-graph-rag-decisions-worth-knowing-before-you-change-anything)
+in the backend README).
+
+Retrieval *quality* is a separate, measured question that `pytest` deliberately
+does not answer — the fake embedder has no semantics at all. That's what
+`backend/scripts/evaluate_graph_recall.py` and the graph-recall metric are for;
+see [Real Embedding Evaluation](backend/README.md#real-embedding-evaluation).
+
+The frontend suite is 372 tests across 26 files, all pure TypeScript, with the
+backend mocked at the network boundary: the API/schema spine, the four entity
+schemas, the domain rules, the graph's pure layers, and the AI slice's resource
+and citation parsing. It has no component tests yet.
 
 ## Layering
 

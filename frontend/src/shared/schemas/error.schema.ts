@@ -2,7 +2,8 @@
  * The two error shapes the backend can emit, described once as schemas.
  *
  * The backend produces **two structurally different error bodies**
- * (analysis §Error Handling, docs/frontend/API_INTEGRATION_PLAN.md §4):
+ * (backend/src/narrative_mind/core/error_handlers.py,
+ * docs/frontend/API_INTEGRATION_PLAN.md §4):
  *
  *  1. **Domain envelope** — from the registered exception handlers:
  *     `{"error": {"code": "not_found", "message": "..."}}`
@@ -19,8 +20,9 @@ import { z } from "zod"
 
 /**
  * Domain error codes the backend's handlers can produce. `conflict` is included
- * although no service currently raises it (analysis §Observations #2) — the
- * handler is registered, so the client honours the full contract at zero cost.
+ * although no service currently raises `ConflictError` — the handler is
+ * registered (backend/src/narrative_mind/core/error_handlers.py), so the client
+ * honours the full contract at zero cost.
  *
  * `authorization_error` and `provider_unavailable` complete the set against
  * `core/error_handlers.py`. The latter is the one that matters in practice:

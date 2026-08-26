@@ -3,7 +3,9 @@
 Presentation only — no computation happens here. Rules that matter: `---`
 (never `0.000`) marks an undefined edge recall, the primary metric is
 visually flagged, and the cost axis is always printed beside the recall
-block so a recall gain bought with context bloat is visible (§5.7).
+block. That last one exists because the metric is recall-only by design: with
+no precision term, a recall gain bought purely with context bloat would
+otherwise look like an improvement.
 """
 
 from narrative_mind.evaluation.models import GraphRecallReport, QueryRecall

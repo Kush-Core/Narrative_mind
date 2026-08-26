@@ -13,8 +13,8 @@ class EvalQuery(BaseModel):
     """One hand-annotated question over the starter world.
 
     `rule` records the structural justification for `reference_nodes`/
-    `reference_edges` (see docs/backend/graph-recall-evaluation.md §4.2) so the
-    annotation stays auditable rather than an opaque literal.
+    `reference_edges` so the annotation stays auditable rather than an opaque
+    literal — see `dataset.py` for how each one was derived.
     """
 
     model_config = ConfigDict(frozen=True)

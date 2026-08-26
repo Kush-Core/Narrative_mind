@@ -5,11 +5,12 @@ depending on ordering, outrank) the caller's own match on raw cosine
 similarity.
 
 This is the test that would catch a regression to
-`db.index.vector.queryNodes()` (§2.3 of the RAG plan): that index returns the
-global top-K across the *entire* database with no owner pre-filter, so an
-identical-text entity sitting in a different account's world would be
-indistinguishable from the caller's own — and could easily win the ranking,
-or simply crowd the caller's real match out of a small top-K.
+`db.index.vector.queryNodes()`: that index returns the global top-K across the
+*entire* database with no owner pre-filter, so an identical-text entity sitting
+in a different account's world would be indistinguishable from the caller's own
+— and could easily win the ranking, or simply crowd the caller's real match out
+of a small top-K. The backend README covers the trade in full, under "The two
+Graph RAG decisions worth knowing before you change anything".
 """
 
 from fastapi.testclient import TestClient

@@ -10,9 +10,13 @@ from narrative_mind.repositories.graph_repo import GraphRepository
 
 # A belt-and-suspenders character cap on top of rag_max_context_entities.
 # Entity/relationship lines here are compact ids and names, not full
-# descriptions, so this rarely binds in practice — but the plan is explicit
-# that an unbounded subgraph at depth 2 on a dense node can be most of a
-# world, and the entity-count cap alone doesn't bound that if names ever grow.
+# descriptions, so this rarely binds in practice — but an unbounded subgraph at
+# depth 2 on a dense node can be most of a world, and the entity-count cap
+# alone doesn't bound that if names ever grow.
+#
+# Where it *does* bind, it truncates in Cypher's collect(DISTINCT r) order,
+# which carries no stability guarantee — so a depth-2 edge set can be cut
+# unpredictably. See the backend README's "Real Embedding Evaluation" section.
 _MAX_CONTEXT_CHARS = 4000
 
 
@@ -21,7 +25,7 @@ class RetrievalService:
 
     Deliberately its own service, testable and tunable without generation in
     the loop — nondeterministic model output on top of untuned retrieval is
-    very hard to debug (Phase 4 of the RAG plan).
+    very hard to debug.
     """
 
     def __init__(

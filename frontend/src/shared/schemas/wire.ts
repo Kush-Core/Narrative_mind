@@ -50,7 +50,8 @@ export function emptyToNull(value: string): string | null {
  * changing nothing.
  *
  * Converting here rather than per-entity is safe *because the whole backend is
- * uniformly snake_case* (a verified fact, analysis §DTOs), and it fails safe:
+ * uniformly snake_case* (a verified fact — backend/src/narrative_mind/domain/),
+ * and it fails safe:
  * every future multi-word field is handled without anyone remembering to. Note
  * this converts **allow-listed top-level keys only** — never nested payload
  * data, which is the corruption case `shared/lib/casing.ts` warns about.
