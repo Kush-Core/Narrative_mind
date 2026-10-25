@@ -182,10 +182,10 @@ cd backend  && uv run pytest -q      # Neo4j must be running for the integration
 cd frontend && npm run test          # Vitest + MSW, no backend required
 ```
 
-The backend suite is 97 tests; 42 of them — the Pydantic models, the whole
+The backend suite is 105 tests; 42 of them — the Pydantic models, the whole
 graph-recall metric and its dataset validation, the AI stub-provider test, the
 canonical-text tests, and two others — need nothing but Python. The remaining
-55 execute real Cypher against the configured Neo4j instance. Each of those
+63 execute real Cypher against the configured Neo4j instance. Each of those
 registers its own account and runs inside that account's world, so tests are
 isolated from each other by the same ownership rule that isolates users, and
 each one deletes its accounts and everything they own afterwards — a suite run

@@ -106,7 +106,9 @@ class EventRepository:
             clauses.append("toLower(e.name) CONTAINS toLower($name_contains)")
         where = "WHERE " + " AND ".join(clauses)
 
-        # sort_by/order_kw are whitelisted, so interpolation is safe here.
+        # sort_by/order_kw are whitelisted, so interpolation is safe here. The id
+        # tiebreaker gives tied rows one order across pages; without it, SKIP/LIMIT
+        # can repeat a row on two pages and skip another (tests/test_pagination.py).
         query = f"""
         MATCH (e:Event)
         {where}
@@ -114,7 +116,7 @@ class EventRepository:
         WITH all_e, size(all_e) AS total
         UNWIND all_e AS e
         WITH e, total
-        ORDER BY e.{sort_by} {order_kw}
+        ORDER BY e.{sort_by} {order_kw}, e.id {order_kw}
         SKIP $offset LIMIT $limit
         RETURN collect(e {{.id, .name, .summary, .timeline_order, .created_at}}) AS items, total
         """

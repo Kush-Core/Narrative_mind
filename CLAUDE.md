@@ -25,12 +25,12 @@ uv run pytest src/narrative_mind/tests/test_characters.py -q          # one file
 uv run pytest src/narrative_mind/tests/test_characters.py::test_name -q  # one test
 ```
 
-97 tests. 42 run standalone: `tests/test_pydantic_models.py`,
+105 tests. 42 run standalone: `tests/test_pydantic_models.py`,
 `tests/test_graph_recall.py` (the whole file — pure metric and dataset
 validation), `tests/test_ai_service.py`, the `canonical_text` tests in
 `tests/test_embeddings.py`, `test_context_entity_cap_holds` in
 `tests/test_retrieval.py`, and `test_root_redirects_to_docs` in
-`tests/test_health.py`. The other 55 fire real Cypher against the configured
+`tests/test_health.py`. The other 63 fire real Cypher against the configured
 Neo4j instance. Each integration test registers its own account and cleans up
 everything that account owns, so the suite is self-isolating and idempotent to
 re-run. No test ever reaches a real embedding or chat provider.

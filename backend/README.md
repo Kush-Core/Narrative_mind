@@ -450,6 +450,9 @@ uv run uvicorn narrative_mind.main:app --reload
 `/characters` (all ✓ auth). List endpoints accept `limit`, `offset`,
 `name_contains`, `sort_by`, `order`, plus one categorical filter each
 (`status` for characters, `region` for locations, `ideology` for factions).
+Every sort breaks ties on `id` in the same direction, so paging through rows
+that share a sort value (the starter world's 27 entities share one
+`created_at`) visits each exactly once; `tests/test_pagination.py` pins it.
 
 ## Authentication
 
@@ -673,7 +676,7 @@ uv run ruff format .       # format
 uv run pytest -q           # run the test suite
 ```
 
-97 tests, of which 42 need nothing but Python:
+105 tests, of which 42 need nothing but Python:
 
 - `tests/test_pydantic_models.py` (9) — the DTO triads and `Page[T]`.
 - `tests/test_graph_recall.py` (25) — metric correctness, aggregation, the
@@ -685,7 +688,7 @@ uv run pytest -q           # run the test suite
   `test_root_redirects_to_docs` in `tests/test_health.py` (which builds the
   app without its lifespan, so it touches neither Neo4j nor auth).
 
-The remaining 55 are integration tests that exercise real Cypher against the
+The remaining 63 are integration tests that exercise real Cypher against the
 configured Neo4j instance, so **Neo4j must be running** for the full suite to
 pass. Each registers its own account, works inside that account's world, and
 deletes the account and everything it owns afterwards — a suite run leaves the

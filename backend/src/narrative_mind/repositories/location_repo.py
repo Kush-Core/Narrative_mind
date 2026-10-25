@@ -113,7 +113,9 @@ class LocationRepository:
             clauses.append("toLower(l.name) CONTAINS toLower($name_contains)")
         where = "WHERE " + " AND ".join(clauses)
 
-        # sort_by/order_kw are whitelisted, so interpolation is safe here.
+        # sort_by/order_kw are whitelisted, so interpolation is safe here. The id
+        # tiebreaker gives tied rows one order across pages; without it, SKIP/LIMIT
+        # can repeat a row on two pages and skip another (tests/test_pagination.py).
         query = f"""
         MATCH (l:Location)
         {where}
@@ -121,7 +123,7 @@ class LocationRepository:
         WITH all_l, size(all_l) AS total
         UNWIND all_l AS l
         WITH l, total
-        ORDER BY l.{sort_by} {order_kw}
+        ORDER BY l.{sort_by} {order_kw}, l.id {order_kw}
         SKIP $offset LIMIT $limit
         RETURN collect(l {{.id, .name, .region, .description, .created_at}}) AS items, total
         """

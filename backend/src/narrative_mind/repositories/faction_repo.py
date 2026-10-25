@@ -114,7 +114,9 @@ class FactionRepository:
             clauses.append("toLower(f.name) CONTAINS toLower($name_contains)")
         where = "WHERE " + " AND ".join(clauses)
 
-        # sort_by/order_kw are whitelisted, so interpolation is safe here.
+        # sort_by/order_kw are whitelisted, so interpolation is safe here. The id
+        # tiebreaker gives tied rows one order across pages; without it, SKIP/LIMIT
+        # can repeat a row on two pages and skip another (tests/test_pagination.py).
         query = f"""
         MATCH (f:Faction)
         {where}
@@ -122,7 +124,7 @@ class FactionRepository:
         WITH all_f, size(all_f) AS total
         UNWIND all_f AS f
         WITH f, total
-        ORDER BY f.{sort_by} {order_kw}
+        ORDER BY f.{sort_by} {order_kw}, f.id {order_kw}
         SKIP $offset LIMIT $limit
         RETURN collect(f {{.id, .name, .ideology, .description, .created_at}}) AS items, total
         """
