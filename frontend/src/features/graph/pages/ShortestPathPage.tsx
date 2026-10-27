@@ -133,7 +133,10 @@ export function ShortestPathPage() {
               {query.data.hops.map((hop, index) => (
                 <li key={`${hop.id}-${index}`} className="flex items-center gap-2">
                   {index > 0 ? (
-                    <ArrowRightIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                    <ArrowRightIcon
+                      className="size-3.5 shrink-0 text-muted-foreground"
+                      aria-hidden
+                    />
                   ) : null}
                   <Button
                     variant="outline"

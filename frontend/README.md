@@ -28,18 +28,18 @@ npm run dev            # http://localhost:5173
 
 ## Scripts
 
-| Script                  | Purpose                                |
-| ----------------------- | --------------------------------------- |
-| `npm run dev`           | Vite dev server with HMR               |
-| `npm run build`         | Type-check + production build (`dist`) |
-| `npm run preview`       | Serve the production build locally     |
-| `npm run typecheck`     | TypeScript project check               |
-| `npm run lint`          | ESLint (typed, import-order, a11y)     |
-| `npm run lint:fix`      | ESLint with autofix                    |
-| `npm run format`        | Prettier write                         |
-| `npm run format:check`  | Prettier verify                        |
-| `npm run test`          | Vitest — run the suite once            |
-| `npm run test:watch`    | Vitest — watch mode                    |
+| Script                 | Purpose                                |
+| ---------------------- | -------------------------------------- |
+| `npm run dev`          | Vite dev server with HMR               |
+| `npm run build`        | Type-check + production build (`dist`) |
+| `npm run preview`      | Serve the production build locally     |
+| `npm run typecheck`    | TypeScript project check               |
+| `npm run lint`         | ESLint (typed, import-order, a11y)     |
+| `npm run lint:fix`     | ESLint with autofix                    |
+| `npm run format`       | Prettier write                         |
+| `npm run format:check` | Prettier verify                        |
+| `npm run test`         | Vitest — run the suite once            |
+| `npm run test:watch`   | Vitest — watch mode                    |
 
 ## Layout
 
