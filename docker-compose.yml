@@ -9,6 +9,40 @@ services:
       NEO4J_AUTH: neo4j/password123
     volumes:
       - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p password123 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  api:
+    build:
+      context: ./backend
+    image: narrative-mind-api:local
+    container_name: narrative-mind-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      # `environment` overrides env_file: inside the container, localhost is the
+      # container itself, not Neo4j or the host's Ollama.
+      NEO4J_URI: bolt://neo4j:7687
+      OLLAMA_HOST: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Linux; Docker Desktop provides it already
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
 
 volumes:
   neo4j_data:

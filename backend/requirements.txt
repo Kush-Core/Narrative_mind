@@ -47,7 +47,7 @@ distro==1.9.0
     # via
     #   google-genai
     #   groq
-dnspython==2.8.0
+dnspython==2.9.0
     # via email-validator
 email-validator==2.3.0
     # via
