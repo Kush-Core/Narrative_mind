@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/header-dark.svg">
+  <img width="100%" alt="Narrative Mind — Fictional worlds as a Neo4j graph, with LLM extraction and Graph RAG" src="assets/header-light.svg">
+</picture>
+
 # Narrative Mind
 
 A narrative intelligence platform for building, understanding, and reasoning
