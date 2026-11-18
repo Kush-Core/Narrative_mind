@@ -1,0 +1,12 @@
+{
+  // CI's npm gate: fail on any high or critical advisory, dev dependencies included.
+  "$schema": "https://github.com/IBM/audit-ci/raw/main/docs/schema.json",
+  "high": true,
+  "allowlist": [
+    // picomatch <= 4.0.7 ReDoS on repeated extglobs. Published 2026-10-19, and no patched
+    // release exists yet. It reaches us only through vite and vitest (dev tooling), whose
+    // globs come from our own config, not user input, and none of it ships in the bundle.
+    // Remove this entry once picomatch publishes a fix and the lockfile picks it up.
+    "GHSA-fc5q-39xc-vjpf",
+  ],
+}

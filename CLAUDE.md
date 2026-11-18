@@ -37,7 +37,9 @@ npm run format:check && npm run typecheck && npm run lint && npm test && npm run
 - After any backend dependency change, run
   `uv export --no-hashes --no-dev -o requirements.txt`. CI fails if that file
   drifts from `uv.lock`, and Vercel installs from it.
-- `pip-audit`, `npm audit --audit-level=high`, and gitleaks over the full history.
+- `pip-audit`, `audit-ci` (npm audit at high, dev deps included, with the
+  reasoned allowlist in `frontend/audit-ci.jsonc`), and gitleaks over the full history.
+  Drop an allowlist entry as soon as its package ships a fix.
 - Docker: the image must run as uid 10001, reach healthy against Neo4j, and pass
   Trivy (Dockerfile config + image, HIGH/CRITICAL).
 
