@@ -35,6 +35,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ---------- runtime ----------
 FROM ${PYTHON_IMAGE} AS runtime
 
+# Pick up Debian security fixes that land before the upstream python tag is rebuilt
+# (zlib1g CVE-2026-85091 shipped in 3.12.16-slim-trixie's 2026-11-08 build). Only this
+# stage ships, so the builder stage is left as the tag provides it.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid app --no-create-home \
       --home-dir /nonexistent --shell /usr/sbin/nologin app
