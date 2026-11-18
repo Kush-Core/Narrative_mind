@@ -124,8 +124,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: npm audit
-        run: npm audit --audit-level=high
+      # audit-ci is npm audit with an allowlist; the exceptions and their reasons
+      # live in frontend/audit-ci.jsonc.
+      - name: npm audit (high and critical)
+        run: npx --yes audit-ci@7.1.0 --config audit-ci.jsonc
 
   docker:
     name: Docker (build, smoke test, Trivy)
